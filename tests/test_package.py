@@ -46,6 +46,11 @@ class PackageTests(unittest.TestCase):
             self.assertTrue(resolved.is_relative_to(PLUGIN.resolve()))
             self.assertTrue(resolved.is_file(), f"broken skill reference: {reference}")
 
+    def test_403_helper_reference_has_a_resolvable_directory_instruction(self):
+        recovery = (SKILL.parent / "references/403-recovery.md").read_text(encoding="utf-8")
+        self.assertIn("folder containing SKILL.md", recovery)
+        self.assertIn("scripts/extract_manifest.py", recovery)
+
     def test_skill_has_no_host_paths_or_signed_manifest_examples(self):
         self.assertTrue(SKILL.is_file(), "missing packaged Kinescope skill")
         files = [path for path in PLUGIN.rglob("*") if path.is_file() and ".git" not in path.parts]

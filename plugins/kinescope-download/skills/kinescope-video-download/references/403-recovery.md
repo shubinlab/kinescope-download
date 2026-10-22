@@ -13,7 +13,7 @@ if [[ -n ${REFERRER_URL:-} ]]; then
   referer_args=(--referer "$REFERRER_URL")
 fi
 
-# Replace the placeholder with this plugin's installed skill directory.
+# Replace the placeholder with the installed skill directory (the folder containing SKILL.md).
 helper="<installed-skill-directory>/scripts/extract_manifest.py"
 python3 "$helper" "$KINESCOPE_URL" "$manifest_file" "${REFERRER_URL:-}"
 
