@@ -42,6 +42,27 @@ class ExtractManifestTests(unittest.TestCase):
         self.assertEqual(status, 1)
         build_opener.assert_not_called()
 
+    def test_sensitive_or_credentialed_referrers_are_rejected_before_any_request(self):
+        for referrer in (
+            "https://user:pass@example.com/course",
+            "https://example.com/course?access_token=secret",
+            "file:///tmp/private",
+        ):
+            with self.subTest(referrer=referrer):
+                with patch.object(extract_manifest, "build_opener") as build_opener:
+                    with patch("sys.stderr", new_callable=io.StringIO):
+                        status = extract_manifest.main(
+                            ["https://kinescope.io/video", "/tmp/manifest", referrer]
+                        )
+                self.assertEqual(status, 1)
+                build_opener.assert_not_called()
+
+    def test_referrer_fragment_is_removed_before_request(self):
+        self.assertEqual(
+            extract_manifest.prepare_referrer("https://example.com/course?unit=1#private"),
+            "https://example.com/course?unit=1",
+        )
+
     def test_redirect_to_private_host_is_rejected(self):
         handler = extract_manifest.TrustedRedirects()
         request = object()
@@ -135,11 +156,12 @@ class ExtractManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / "manifest.txt"
             output.write_text("keep this file\n", encoding="utf-8")
-            with patch.object(extract_manifest, "build_opener", return_value=Opener()):
+            with patch.object(extract_manifest, "build_opener", return_value=Opener()) as build_opener:
                 with patch("sys.stderr", new_callable=io.StringIO):
                     status = extract_manifest.main(["https://kinescope.io/video", str(output)])
             self.assertEqual(status, 1)
             self.assertEqual(output.read_text(encoding="utf-8"), "keep this file\n")
+            build_opener.assert_not_called()
 
 
 if __name__ == "__main__":

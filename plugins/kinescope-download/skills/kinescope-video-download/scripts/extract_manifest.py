@@ -7,7 +7,7 @@ import html
 import os
 import re
 import sys
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qsl, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
@@ -31,6 +31,30 @@ def trusted_https_url(value: str) -> bool:
         return False
 
 
+def prepare_referrer(value: str) -> str:
+    if not value:
+        return ""
+    try:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme.lower() not in {"https", "http"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or any(ord(char) < 32 or ord(char) == 127 for char in value)
+        ):
+            raise ValueError
+        parsed.port  # force validation of a malformed port before using the URL
+        sensitive = ("token", "secret", "password", "passwd", "auth", "signature", "credential", "cookie", "jwt", "session")
+        for key, _ in parse_qsl(parsed.query, keep_blank_values=True):
+            normalized = re.sub(r"[^a-z0-9]", "", key.lower())
+            if any(marker in normalized for marker in sensitive):
+                raise ValueError
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
+    except ValueError as error:
+        raise ValueError("Referrer must be HTTP(S) without credentials or sensitive query parameters") from error
+
+
 class TrustedRedirects(HTTPRedirectHandler):
     def redirect_request(self, request, response, code, message, headers, new_url):
         if not trusted_https_url(new_url):
@@ -48,11 +72,14 @@ def main(argv: list[str]) -> int:
     if not trusted_https_url(page_url):
         print("Page URL must use HTTPS on a recognized Kinescope host.", file=sys.stderr)
         return 1
-    if referrer_url:
-        parsed_referrer = urlsplit(referrer_url)
-        if parsed_referrer.scheme not in {"https", "http"} or not parsed_referrer.hostname:
-            print("Referrer must be an HTTP or HTTPS URL.", file=sys.stderr)
-            return 1
+    try:
+        referrer_url = prepare_referrer(referrer_url)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    if os.path.lexists(output_path):
+        print("Output file already exists; refusing to overwrite it.", file=sys.stderr)
+        return 1
 
     headers = {"User-Agent": "Mozilla/5.0"}
     if referrer_url:
