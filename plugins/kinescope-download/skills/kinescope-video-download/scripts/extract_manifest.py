@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import html
+import os
 import re
 import sys
-from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -82,7 +82,16 @@ def main(argv: list[str]) -> int:
         print(f"Expected one recognized Kinescope master manifest; found {len(manifests)}", file=sys.stderr)
         return 1
 
-    Path(output_path).write_text(manifests[0] + "\n", encoding="utf-8")
+    try:
+        descriptor = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            output.write(manifests[0] + "\n")
+    except FileExistsError:
+        print("Output file already exists; refusing to overwrite it.", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"Could not create the private output file: {error}", file=sys.stderr)
+        return 1
     print("One Kinescope master manifest saved to the private temporary file")
     return 0
 

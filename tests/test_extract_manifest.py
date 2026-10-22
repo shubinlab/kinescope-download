@@ -1,5 +1,6 @@
 import io
 import importlib.util
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -110,7 +111,35 @@ class ExtractManifestTests(unittest.TestCase):
                     status = extract_manifest.main(["https://kinescope.io/video", str(output)])
             self.assertEqual(status, 0)
             self.assertEqual(output.read_text(encoding="utf-8"), signed_url + "\n")
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
             self.assertNotIn(signed_url, stdout.getvalue())
+
+    def test_existing_output_file_is_never_overwritten(self):
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+            def geturl(self):
+                return "https://kinescope.io/video"
+
+            def read(self, _limit):
+                return b'"https://cdn.kinescope.io/master.m3u8"'
+
+        class Opener:
+            def open(self, *_args, **_kwargs):
+                return Response()
+
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "manifest.txt"
+            output.write_text("keep this file\n", encoding="utf-8")
+            with patch.object(extract_manifest, "build_opener", return_value=Opener()):
+                with patch("sys.stderr", new_callable=io.StringIO):
+                    status = extract_manifest.main(["https://kinescope.io/video", str(output)])
+            self.assertEqual(status, 1)
+            self.assertEqual(output.read_text(encoding="utf-8"), "keep this file\n")
 
 
 if __name__ == "__main__":
