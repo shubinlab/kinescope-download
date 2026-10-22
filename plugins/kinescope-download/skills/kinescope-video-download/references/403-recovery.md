@@ -1,6 +1,6 @@
 # Kinescope manifest 403 recovery
 
-Use this only after the share URL is authorized and ordinary `yt-dlp -F` extraction fails with 403. The bundled helper accepts HTTPS Kinescope URLs, checks redirect destinations, caps page reads at 8 MiB, rejects existing output paths before network access, and exclusively creates one manifest file with mode `0600` without printing the signed URL. A supplied referrer must not contain URL credentials or sensitive query parameters.
+Use this only after the share URL is authorized and ordinary `yt-dlp -F` extraction fails with 403. The bundled helper accepts HTTPS Kinescope URLs, checks redirect destinations, caps page reads at 8 MiB, rejects existing output paths before network access, and exclusively creates one manifest file with mode `0600` without printing the signed URL. When sending a supplied referrer, it keeps only the origin and path; it removes the query and fragment.
 
 Set `KINESCOPE_URL` to the supplied Kinescope share/embed URL and `OUTPUT_DIR` to the destination directory. If the stream is embedded elsewhere, set `REFERRER_URL` to that actual embedding page; otherwise leave it empty.
 

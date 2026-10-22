@@ -63,7 +63,13 @@ class ExtractManifestTests(unittest.TestCase):
     def test_referrer_fragment_is_removed_before_request(self):
         self.assertEqual(
             extract_manifest.prepare_referrer("https://example.com/course?unit=1#private"),
-            "https://example.com/course?unit=1",
+            "https://example.com/course",
+        )
+
+    def test_arbitrary_referrer_query_parameters_are_removed(self):
+        self.assertEqual(
+            extract_manifest.prepare_referrer("https://example.com/course?opaque=value"),
+            "https://example.com/course",
         )
 
     def test_redirect_to_private_host_is_rejected(self):

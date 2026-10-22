@@ -3,7 +3,7 @@
   "plugins": [
     {
       "name": "kinescope-download",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "source": {
         "source": "local",
         "path": "./plugins/kinescope-download"

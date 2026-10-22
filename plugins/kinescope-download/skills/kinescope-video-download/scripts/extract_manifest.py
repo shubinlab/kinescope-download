@@ -50,7 +50,9 @@ def prepare_referrer(value: str) -> str:
             normalized = re.sub(r"[^a-z0-9]", "", key.lower())
             if normalized == "key" or normalized.endswith("key") or any(marker in normalized for marker in sensitive):
                 raise ValueError
-        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
+        # Do not send query credentials with a caller-supplied page URL. Keep the
+        # origin/path needed by embed referrer checks, but remove query/fragment.
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
     except ValueError as error:
         raise ValueError("Referrer must be HTTP(S) without credentials or sensitive query parameters") from error
 
