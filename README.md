@@ -1,0 +1,132 @@
+<div align="center">
+  <img src="assets/logo.svg" width="420" alt="Kinescope Download">
+  <p><strong>The careful, fast path from a Kinescope player link to a verified MP4.</strong></p>
+  <p>
+    <a href="https://github.com/shubinlab/kinescope-download/actions"><img src="https://img.shields.io/github/actions/workflow/status/shubinlab/kinescope-download/ci.yml?branch=main&label=checks" alt="Checks"></a>
+    <img src="https://img.shields.io/badge/Linux-supported-4c9a6a" alt="Linux supported">
+    <img src="https://img.shields.io/badge/macOS-supported-6376d8" alt="macOS supported">
+    <img src="https://img.shields.io/badge/Codex-plugin-15b8a6" alt="Codex plugin">
+    <img src="https://img.shields.io/badge/Claude%20Code-plugin-d98b52" alt="Claude Code plugin">
+  </p>
+</div>
+
+---
+
+Kinescope Download packages one shared skill for **Codex** and **Claude Code**. It checks the available streams, prefers the highest authorized source, uses bounded parallel HLS downloads, and verifies the final MP4.
+
+## Install
+
+### Linux and macOS
+
+Clone the repository and run the installer:
+
+```bash
+git clone https://github.com/shubinlab/kinescope-download.git
+cd kinescope-download
+./install.sh
+```
+
+The installer detects installed Codex and Claude Code CLIs and registers the plugin in each selected client at user scope. Preview the commands first with `./install.sh --dry-run`. Install missing media tools only when you choose `--with-deps`:
+
+```bash
+./install.sh --with-deps
+```
+
+The optional dependency step uses Homebrew on macOS; on Linux it uses Omarchy's `omarchy pkg add` when available, otherwise apt, dnf, pacman, or zypper. It does not bootstrap a package manager or add third-party package sources.
+
+### Select one client
+
+```bash
+./install.sh --codex
+./install.sh --claude
+```
+
+Or install both explicitly:
+
+```bash
+./install.sh --all
+```
+
+The default `./install.sh` installs into whichever supported clients are already on `PATH`. The script never runs as root; package managers use `sudo` only when you explicitly pass `--with-deps`.
+
+### Install manually
+
+Codex:
+
+```bash
+codex plugin marketplace add shubinlab/kinescope-download
+codex plugin add kinescope-download@kinescope-download
+```
+
+Claude Code:
+
+```bash
+claude plugin marketplace add shubinlab/kinescope-download
+claude plugin install kinescope-download@kinescope-download --scope user
+```
+
+In Claude Code, invoke `/kinescope-download:kinescope-video-download`. Codex can select the packaged skill when a Kinescope download request matches it.
+
+## Requirements
+
+- Codex CLI with plugin marketplace support and/or Claude Code with plugin commands.
+- `yt-dlp` and FFmpeg (`ffprobe` is included with FFmpeg) to download and verify media.
+- Python 3 to run the cross-platform installer.
+
+The plugin can be installed without media tools. If they are missing, it reports that; `--with-deps` installs them using a supported package manager. `--dry-run` does not install packages or change client configuration.
+
+## What it does
+
+1. Uses the Kinescope API for an authorized original asset when the user already has a local API token; otherwise it inspects the player’s HLS formats.
+2. Selects the highest available video and audio streams for the specific video, then merges them into MP4.
+3. Starts HLS fragment concurrency at 16 and reduces it if the service returns rate limits or fragment errors.
+4. Recovers a common 403 caused by HTML-escaped signed manifests without printing or storing signed URLs in logs.
+5. Checks the MP4 metadata and performs a full decode when integrity verification is needed.
+6. Changes VPN routing only when requested, and keeps other destinations such as ChatGPT on the VPN.
+
+Quality is per-video. A 4K rendition is used only when the authorized stream actually provides one; format IDs are never hardcoded between videos.
+
+## Safety and privacy
+
+- Use this only for videos you own or are authorized to save.
+- The plugin does not bypass DRM, retrieve decryption keys, or install DRM circumvention tools.
+- API tokens, browser cookies, and signed stream URLs stay local and out of logs and reports.
+- Installation adds a marketplace and the plugin to the selected client. It does not add hooks, MCP servers, daemons, or startup tasks.
+- VPN changes are opt-in. Direct egress is not claimed from a route table or socket address alone; the skill requires interface-aware packet evidence during transfer.
+
+Kinescope is a trademark of its owner. Kinescope Download is an independent community project and is not affiliated with or endorsed by Kinescope.
+
+## Update or uninstall
+
+Update through Codex:
+
+```bash
+codex plugin marketplace upgrade kinescope-download
+```
+
+Update through Claude Code:
+
+```bash
+claude plugin update kinescope-download@kinescope-download
+```
+
+To uninstall, remove the plugin first, then its marketplace:
+
+```bash
+codex plugin remove kinescope-download@kinescope-download
+codex plugin marketplace remove kinescope-download
+claude plugin uninstall kinescope-download@kinescope-download --scope user
+claude plugin marketplace remove kinescope-download --scope user
+```
+
+Uninstalling the plugin does not remove `yt-dlp`, FFmpeg, downloaded videos, or unrelated marketplaces.
+
+## Development checks
+
+```bash
+python3 -m unittest discover -s tests -v
+claude plugin validate --strict plugins/kinescope-download
+claude plugin validate --strict .
+```
+
+For the exact package design, see [`docs/design.md`](docs/design.md). For workflow rules and format research, see the packaged [Kinescope skill](plugins/kinescope-download/skills/kinescope-video-download/SKILL.md).

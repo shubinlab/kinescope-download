@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Kinescope Download icon</title>
+  <defs>
+    <linearGradient id="aqua" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6af0e2"/>
+      <stop offset="1" stop-color="#13a6a3"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#102a3b"/>
+  <circle cx="256" cy="256" r="178" fill="none" stroke="url(#aqua)" stroke-width="24"/>
+  <path d="m256 256-58-164a178 178 0 0 1 151 17Z" fill="url(#aqua)"/>
+  <path d="m256 256 166-55a178 178 0 0 1-15 148Z" fill="url(#aqua)" opacity=".94"/>
+  <path d="m256 256 58 164a178 178 0 0 1-151-17Z" fill="url(#aqua)" opacity=".86"/>
+  <path d="M256 256 90 311a178 178 0 0 1 15-148Z" fill="url(#aqua)" opacity=".78"/>
+  <circle cx="256" cy="256" r="44" fill="#102a3b" stroke="#e1fffb" stroke-width="18"/>
+</svg>

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  package-tests:
+    name: Package tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check shell entrypoint syntax
+        run: bash -n install.sh
+      - name: Compile installer
+        run: python3 -m py_compile scripts/install.py plugins/kinescope-download/skills/kinescope-video-download/scripts/extract_manifest.py
+      - name: Run package and installer tests
+        run: python3 -m unittest discover -s tests -v

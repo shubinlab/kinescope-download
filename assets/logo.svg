@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 190" role="img" aria-labelledby="title desc">
+  <title id="title">Kinescope Download</title>
+  <desc id="desc">A teal film aperture mark next to the words Kinescope Download.</desc>
+  <defs>
+    <linearGradient id="aqua" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#55e5dc"/>
+      <stop offset="1" stop-color="#159b9b"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="174" height="174" rx="46" fill="#102a3b"/>
+  <circle cx="95" cy="95" r="63" fill="none" stroke="url(#aqua)" stroke-width="8"/>
+  <path d="M95 95 75 39a63 63 0 0 1 53 6Z" fill="url(#aqua)"/>
+  <path d="m95 95 57-19a63 63 0 0 1-5 52Z" fill="url(#aqua)" opacity=".92"/>
+  <path d="m95 95 20 56a63 63 0 0 1-53-6Z" fill="url(#aqua)" opacity=".84"/>
+  <path d="M95 95 38 114a63 63 0 0 1 5-52Z" fill="url(#aqua)" opacity=".76"/>
+  <circle cx="95" cy="95" r="15" fill="#102a3b" stroke="#d9fffb" stroke-width="5"/>
+  <text x="218" y="86" fill="#102a3b" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="42" font-weight="750" letter-spacing="-1.5">Kinescope</text>
+  <text x="220" y="137" fill="#238f92" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="27" font-weight="650" letter-spacing="3.5">DOWNLOAD</text>
+</svg>

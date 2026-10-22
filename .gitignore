@@ -1,0 +1,13 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+.superpowers/
+docs/superpowers/plans/
+downloads/
+*.mp4
+*.mkv
+*.part
