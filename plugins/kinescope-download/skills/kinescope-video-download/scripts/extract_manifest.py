@@ -48,7 +48,7 @@ def prepare_referrer(value: str) -> str:
         sensitive = ("token", "secret", "password", "passwd", "auth", "signature", "credential", "cookie", "jwt", "session")
         for key, _ in parse_qsl(parsed.query, keep_blank_values=True):
             normalized = re.sub(r"[^a-z0-9]", "", key.lower())
-            if any(marker in normalized for marker in sensitive):
+            if normalized == "key" or normalized.endswith("key") or any(marker in normalized for marker in sensitive):
                 raise ValueError
         return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
     except ValueError as error:

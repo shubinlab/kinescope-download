@@ -10,7 +10,7 @@
       "name": "kinescope-download",
       "source": "./plugins/kinescope-download",
       "description": "Download authorized Kinescope videos as verified MP4 files.",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "category": "Media",
       "homepage": "https://github.com/shubinlab/kinescope-download",
       "license": "MIT",

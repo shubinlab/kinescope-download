@@ -46,6 +46,9 @@ class ExtractManifestTests(unittest.TestCase):
         for referrer in (
             "https://user:pass@example.com/course",
             "https://example.com/course?access_token=secret",
+            "https://example.com/course?api_key=secret",
+            "https://example.com/course?key=secret",
+            "https://example.com/course?accessKey=secret",
             "file:///tmp/private",
         ):
             with self.subTest(referrer=referrer):
