@@ -34,6 +34,7 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(entry["source"], "./plugins/kinescope-download")
         manifest = self.read_json(PLUGIN / ".claude-plugin/plugin.json")
         self.assertEqual(manifest["name"], entry["name"])
+        self.assertEqual(manifest["version"], entry["version"])
         self.assertTrue(SKILL.is_file())
 
     def test_skill_references_resolve_and_stay_inside_package(self):
