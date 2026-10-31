@@ -32,10 +32,24 @@ class PackageTests(unittest.TestCase):
         entry = next(item for item in marketplace["plugins"] if item["name"] == "kinescope-download")
         self.assertEqual(marketplace["name"], "kinescope-download")
         self.assertEqual(entry["source"], "./plugins/kinescope-download")
+        self.assertNotIn("version", entry)
         manifest = self.read_json(PLUGIN / ".claude-plugin/plugin.json")
         self.assertEqual(manifest["name"], entry["name"])
-        self.assertEqual(manifest["version"], entry["version"])
         self.assertTrue(SKILL.is_file())
+
+    def test_current_plugin_release_versions_are_consistent(self):
+        codex_plugin = self.read_json(PLUGIN / "plugin.json")
+        codex_marketplace = self.read_json(ROOT / ".agents/plugins/marketplace.json")
+        claude_plugin = self.read_json(PLUGIN / ".claude-plugin/plugin.json")
+        claude_marketplace = self.read_json(ROOT / ".claude-plugin/marketplace.json")
+        codex_entry = next(item for item in codex_marketplace["plugins"] if item["name"] == "kinescope-download")
+        claude_entry = next(item for item in claude_marketplace["plugins"] if item["name"] == "kinescope-download")
+
+        self.assertEqual(codex_plugin["version"], "1.0.5")
+        self.assertEqual(codex_entry["version"], codex_plugin["version"])
+        self.assertEqual(claude_plugin["version"], codex_plugin["version"])
+        self.assertNotIn("version", claude_entry)
+        self.assertEqual(claude_entry["source"], "./plugins/kinescope-download")
 
     def test_skill_references_resolve_and_stay_inside_package(self):
         self.assertTrue(SKILL.is_file(), "missing packaged Kinescope skill")
