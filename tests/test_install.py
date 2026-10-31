@@ -164,6 +164,7 @@ esac
         release.write_text('ID=omarchy\nID_LIKE=arch\nPRETTY_NAME="Omarchy Test"\n', encoding="utf-8")
         source = (ROOT / "install.sh").read_text(encoding="utf-8").replace("/etc/os-release", f'"{release}"')
         executable(script_dir / "install.sh", source)
+        executable(self.bin / "uname", "#!/bin/sh\nprintf 'Linux\\n'\n")
         executable(self.bin / "omarchy", "#!/bin/sh\n"
             "set -eu\n"
             "printf '%s\\n' \"$*\" >> \"$KINESCOPE_TEST_LOG\"\n"
