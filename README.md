@@ -18,21 +18,17 @@ Kinescope Download packages one shared skill for **Codex** and **Claude Code**. 
 
 ### Linux and macOS
 
-Clone the repository and run the installer:
+For a first-time plugin install, clone the repository and run its local installer in one command:
 
 ```bash
-git clone https://github.com/shubinlab/kinescope-download.git
-cd kinescope-download
-./install.sh
+git clone --depth 1 https://github.com/shubinlab/kinescope-download.git kinescope-download && kinescope-download/install.sh --with-deps
 ```
 
-The installer detects installed Codex and Claude Code CLIs and registers the plugin in each selected client at user scope. Preview the commands first with `./install.sh --dry-run`. Install missing media tools only when you choose `--with-deps`:
+This clones the repository and executes the checked-out `install.sh`; it does not pipe a remote script into a shell. Run it as your regular user, not with `sudo`. Git, Python 3, and at least one supported client CLI (`codex` or `claude`) must already be installed and on `PATH`; this installer does not install those prerequisites.
 
-```bash
-./install.sh --with-deps
-```
+The installer registers the plugin at user scope in every supported client found on `PATH`. Use `--codex` or `--claude` to select one client. `--with-deps` explicitly authorizes installing only missing `yt-dlp` and FFmpeg packages. The installer checks whether `yt-dlp`, `ffmpeg`, and `ffprobe` are discoverable on `PATH`; it does not check versions or run health probes. If media tools are missing, macOS uses Homebrew; Linux uses Omarchy when available, otherwise apt, dnf, pacman, or zypper. A supported package manager and any required `sudo` access are needed only when tools are missing. It does not bootstrap a package manager or add third-party package sources.
 
-The optional dependency step uses Homebrew on macOS; on Linux it uses Omarchy's `omarchy pkg add` when available, otherwise apt, dnf, pacman, or zypper. It does not bootstrap a package manager or add third-party package sources.
+To preview planned client and package changes, clone first and run `kinescope-download/install.sh --with-deps --dry-run`. Installation steps are sequential, not transactional; if a later step fails, earlier setup may remain. The installer checks current state on retry and avoids duplicate client registrations.
 
 ### Select one client
 
@@ -69,9 +65,12 @@ In Claude Code, invoke `/kinescope-download:kinescope-video-download`. Codex can
 
 ## Requirements
 
+- Git to clone the repository.
+- Python 3 to run the cross-platform installer.
 - Codex CLI with plugin marketplace support and/or Claude Code with plugin commands.
 - `yt-dlp` and FFmpeg (`ffprobe` is included with FFmpeg) to download and verify media.
-- Python 3 to run the cross-platform installer.
+
+The client CLI must already be installed; this repository installs the plugin, not Codex or Claude Code itself.
 
 The plugin can be installed without media tools. If they are missing, it reports that; `--with-deps` installs them using a supported package manager. `--dry-run` does not install packages or change client configuration.
 

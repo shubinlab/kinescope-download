@@ -48,11 +48,10 @@ def run(
         return None
     result = subprocess.run(command, text=True, capture_output=True, check=False)
     if result.returncode:
-        details = (result.stderr or result.stdout).strip()
-        if details:
-            details = details[-1200:]
-            raise InstallError(f"Command failed ({result.returncode}): {' '.join(command)}\n{details}")
-        raise InstallError(f"Command failed ({result.returncode}): {' '.join(command)}")
+        raise InstallError(
+            f"Command failed ({result.returncode}): {' '.join(command)}. "
+            "Child output was suppressed to avoid logging credentials or signed URLs."
+        )
     return result
 
 
