@@ -51,7 +51,7 @@ class PackageTests(unittest.TestCase):
         codex_entry = next(item for item in codex_marketplace["plugins"] if item["name"] == "kinescope-download")
         claude_entry = next(item for item in claude_marketplace["plugins"] if item["name"] == "kinescope-download")
 
-        self.assertEqual(codex_plugin["version"], "1.3.0")
+        self.assertEqual(codex_plugin["version"], "1.4.0")
         self.assertEqual(codex_entry["version"], codex_plugin["version"])
         self.assertEqual(claude_plugin["version"], codex_plugin["version"])
         self.assertNotIn("version", claude_entry)
@@ -203,7 +203,10 @@ class PackageTests(unittest.TestCase):
 
     def test_skill_has_no_host_paths_or_signed_manifest_examples(self):
         self.assertTrue(SKILL.is_file(), "missing packaged Kinescope skill")
-        files = [path for path in PLUGIN.rglob("*") if path.is_file() and ".git" not in path.parts]
+        files = [
+            path for path in PLUGIN.rglob("*")
+            if path.is_file() and ".git" not in path.parts and "__pycache__" not in path.parts
+        ]
         text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in files)
         self.assertNotIn("/home/totem/", text)
         self.assertNotRegex(text, r"https?://kinescope\.io/[^\s\"']+master\.m3u8\?[^\s\"']*(?:sign|token)=")
@@ -211,11 +214,14 @@ class PackageTests(unittest.TestCase):
         self.assertNotIn("/opt/adguardvpn_cli", text)
         self.assertIn("dscacheutil", text)
 
-    def test_installer_does_not_execute_a_remote_shell_payload(self):
+    def test_installer_does_not_pipe_remote_shell_payload(self):
         shell = (ROOT / "install.sh").read_text(encoding="utf-8")
         python = (ROOT / "scripts/install.py").read_text(encoding="utf-8")
         self.assertNotRegex(shell + python, r"curl[^\n]*\|\s*(?:bash|sh)")
         self.assertNotIn("shell=True", python)
+        self.assertIn("--proto-redir '=https'", shell)
+        self.assertIn("--max-redirect=0", shell)
+        self.assertIn("https://codeload.github.com/*", shell)
 
     def test_readme_documents_supported_clients_and_optional_dependencies(self):
         readme = ROOT / "README.md"
@@ -225,33 +231,24 @@ class PackageTests(unittest.TestCase):
             self.assertIn(required, text)
         self.assertIn("./install.sh", text)
 
-    def test_readme_documents_one_command_github_install_and_prerequisites(self):
+    def test_readme_documents_one_command_bootstrap_and_prerequisites(self):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(
-            "git clone --depth 1 https://github.com/shubinlab/kinescope-download.git kinescope-download && kinescope-download/install.sh --with-deps",
+            "https://raw.githubusercontent.com/shubinlab/kinescope-download/v1.4.0/install.sh",
             text,
         )
-        self.assertIn("use `--codex` or `--claude` for one client", text)
-        self.assertIn("omarchy pkg add git python", text)
-        self.assertIn("brew install git python", text)
-        self.assertIn("brew install --cask codex", text)
-        self.assertIn("brew install --cask claude-code", text)
+        self.assertIn("Use `--codex`, `--claude`, or `--all`", text)
+        self.assertIn("Git is then checked and installed if missing", text)
+        self.assertIn("installs Python 3 through the detected native package manager when missing", text)
+        self.assertIn("the script never signs in for you", text)
         self.assertIn("https://code.claude.com/docs/en/setup", text)
-        self.assertIn("The GitHub clone command requires Git", text)
-        self.assertIn("installer itself requires Python 3 and at least one client CLI", text)
-        self.assertIn("https://brew.sh/", text)
-        self.assertIn("Known immutable variants—Fedora Silverblue, Kinoite, Sericea, Onyx, CoreOS and IoT", text)
-        self.assertIn("openSUSE MicroOS, Aeon and Kalpa—are left untouched", text)
-        self.assertIn("sudo apt-get install git python3", text)
-        self.assertIn("Fedora Workstation/Server", text)
-        self.assertIn("sudo dnf install git python3", text)
-        self.assertIn("sudo pacman -S git python", text)
-        self.assertIn("sudo zypper install git python3", text)
-        self.assertIn("It detects the operating-system or Linux distribution version, architecture, available package manager", text)
+        self.assertIn("https://github.com/openai/codex#installing-and-running-codex-cli", text)
+        self.assertIn("The installer detects and reports the OS or Linux distribution version, architecture", text)
+        self.assertIn("It stops on Fedora Atomic variants", text)
+        self.assertIn("NixOS, SteamOS, and known Bazzite/Universal Blue IDs", text)
         self.assertIn("does not enforce minimum versions or run health probes", text)
-        self.assertIn("It does not install Codex or Claude Code or sign in to either client", text)
-        self.assertIn("run the checked-out installer", text)
-        self.assertIn("does not pipe a remote script into a shell", text)
+        self.assertIn("the script never signs in for you", text)
+        self.assertIn("source archive", text)
         self.assertIn("--dry-run", text)
 
     def test_brand_asset_is_valid_svg(self):
