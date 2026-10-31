@@ -76,7 +76,7 @@ The plugin can be installed without media tools. If they are missing, it reports
 
 ## What it does
 
-1. Uses the Kinescope API for an authorized original asset when the user already has a local API token; otherwise it inspects the player’s HLS formats.
+1. Guides the use of one unambiguous authorized original API asset when a token is already available locally, including container inspection, stream-copy remux when possible, and HLS fallback if remuxing is unsupported.
 2. Selects the highest available video and audio streams for the specific video, then merges them into MP4.
 3. Starts HLS fragment concurrency at 16 and reduces it if the service returns rate limits or fragment errors.
 4. Recovers a common 403 caused by HTML-escaped signed manifests without printing or storing signed URLs in logs.
@@ -89,7 +89,9 @@ Quality is per-video. A 4K rendition is used only when the authorized stream act
 
 - Use this only for videos you own or are authorized to save.
 - The plugin does not bypass DRM, retrieve decryption keys, or install DRM circumvention tools.
-- API tokens, browser cookies, and signed stream URLs stay local and out of logs and reports.
+- Keep API tokens, browser cookies, and signed URLs local; do not paste them into chat or publish raw downloader errors. The 403 helper stores the extracted manifest in a mode-`0600` temporary file and does not print it.
+- Signed or token-bearing share and API URLs should be passed on stdin; do not put them in command text, shell history, environment variables, or process arguments.
+- The plugin does not silently choose among ambiguous API assets or transcode a non-MP4 original; it reports the format and asks before a lossy conversion.
 - Installation adds a marketplace and the plugin to the selected client. It does not add hooks, MCP servers, daemons, or startup tasks.
 - VPN changes are opt-in. Direct egress is not claimed from a route table or socket address alone; the skill requires interface-aware packet evidence during transfer.
 

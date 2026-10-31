@@ -65,11 +65,28 @@ class TrustedRedirects(HTTPRedirectHandler):
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) not in (2, 3):
-        print("Usage: extract_manifest.py KINESCOPE_URL OUTPUT_FILE [REFERRER_URL]", file=sys.stderr)
-        return 2
+    if argv and argv[0] == "--url-stdin":
+        if len(argv) not in (2, 3):
+            print("Usage: extract_manifest.py --url-stdin OUTPUT_FILE [REFERRER_URL]", file=sys.stderr)
+            return 2
+        _, output_path, *referrer = argv
+        page_url = sys.stdin.readline(16_385).rstrip("\r\n")
+        if len(page_url) > 16_384 or "\n" in page_url or "\r" in page_url:
+            print("Page URL input is too long or malformed.", file=sys.stderr)
+            return 1
+    else:
+        if len(argv) not in (2, 3):
+            print("Usage: extract_manifest.py KINESCOPE_URL OUTPUT_FILE [REFERRER_URL]", file=sys.stderr)
+            return 2
+        page_url, output_path, *referrer = argv
+        try:
+            parsed_page_url = urlsplit(page_url)
+        except ValueError:
+            parsed_page_url = None
+        if parsed_page_url is not None and (parsed_page_url.query or parsed_page_url.fragment):
+            print("Page URLs with a query or fragment must be provided through --url-stdin.", file=sys.stderr)
+            return 1
 
-    page_url, output_path, *referrer = argv
     referrer_url = referrer[0] if referrer else ""
     if not trusted_https_url(page_url):
         print("Page URL must use HTTPS on a recognized Kinescope host.", file=sys.stderr)
@@ -94,8 +111,10 @@ def main(argv: list[str]) -> int:
             if not trusted_https_url(final_url):
                 raise ValueError("Final response URL is not an HTTPS Kinescope URL")
             page = response.read(MAX_PAGE_BYTES + 1)
-    except (OSError, ValueError) as error:
-        print(f"Could not fetch the Kinescope page safely: {error}", file=sys.stderr)
+    except (OSError, ValueError):
+        # Network exception strings can contain the request URL, including its
+        # query credentials. Keep diagnostics useful without echoing that URL.
+        print("Could not fetch the Kinescope page safely; check access and try again.", file=sys.stderr)
         return 1
 
     if len(page) > MAX_PAGE_BYTES:
