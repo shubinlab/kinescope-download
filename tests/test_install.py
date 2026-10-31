@@ -103,6 +103,14 @@ esac
         self.assertIn("Usage:", result.stdout)
         self.assertEqual(self.calls(), "")
 
+    def test_no_client_defaults_to_installing_both_without_a_prompt(self):
+        (self.bin / "codex").unlink()
+        result = self.run_installer("--dry-run")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Would install missing codex CLI", result.stdout)
+        self.assertIn("Would install missing claude CLI", result.stdout)
+        self.assertNotIn("No client CLI found", result.stdout)
+
     def test_bad_or_conflicting_flags_fail_before_mutation(self):
         for args in (("--unknown",), ("--codex", "--all")):
             with self.subTest(args=args):

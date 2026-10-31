@@ -51,7 +51,7 @@ class PackageTests(unittest.TestCase):
         codex_entry = next(item for item in codex_marketplace["plugins"] if item["name"] == "kinescope-download")
         claude_entry = next(item for item in claude_marketplace["plugins"] if item["name"] == "kinescope-download")
 
-        self.assertEqual(codex_plugin["version"], "1.6.0")
+        self.assertEqual(codex_plugin["version"], "1.6.1")
         self.assertEqual(codex_entry["version"], codex_plugin["version"])
         self.assertEqual(claude_plugin["version"], codex_plugin["version"])
         self.assertNotIn("version", claude_entry)
@@ -238,15 +238,15 @@ class PackageTests(unittest.TestCase):
             "curl -fsSL https://shubin.co/k | sh",
             text,
         )
-        self.assertIn("same `install.sh` published in release 1.6.0", text)
-        self.assertIn("Use `--codex`, `--claude`, or `--all`", text)
+        self.assertIn("same `install.sh` published in release 1.6.1", text)
+        self.assertIn("If neither is present, it installs both Codex and Claude Code", text)
+        self.assertIn("Use `--codex` or `--claude`", text)
         self.assertIn("It does not hand off to another installer or require Python", text)
         self.assertIn("It checks and installs missing Git, Codex/Claude CLI, yt-dlp, and FFmpeg", text)
-        self.assertIn("the script never signs in for you", text)
+        self.assertIn("Official installers do not sign in for you", text)
         self.assertIn("The script detects and reports the OS or Linux distribution version, architecture", text)
         self.assertIn("It stops on Fedora Atomic variants", text)
         self.assertIn("NixOS, SteamOS, and known Bazzite/Universal Blue IDs", text)
-        self.assertIn("the script never signs in for you", text)
         self.assertIn("--dry-run", text)
 
     def test_brand_asset_is_valid_svg(self):
