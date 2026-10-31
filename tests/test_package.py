@@ -1,6 +1,12 @@
 import json
+import os
+import pty
 import re
+import select
+import shlex
 import struct
+import tempfile
+import time
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -45,7 +51,7 @@ class PackageTests(unittest.TestCase):
         codex_entry = next(item for item in codex_marketplace["plugins"] if item["name"] == "kinescope-download")
         claude_entry = next(item for item in claude_marketplace["plugins"] if item["name"] == "kinescope-download")
 
-        self.assertEqual(codex_plugin["version"], "1.1.0")
+        self.assertEqual(codex_plugin["version"], "1.2.0")
         self.assertEqual(codex_entry["version"], codex_plugin["version"])
         self.assertEqual(claude_plugin["version"], codex_plugin["version"])
         self.assertNotIn("version", claude_entry)
@@ -69,17 +75,116 @@ class PackageTests(unittest.TestCase):
     def test_skill_documents_secure_share_url_input_and_original_asset_checks(self):
         skill = SKILL.read_text(encoding="utf-8")
         recovery = (SKILL.parent / "references/403-recovery.md").read_text(encoding="utf-8")
+        api_reference = (SKILL.parent / "references/api-original.md").read_text(encoding="utf-8")
         for phrase in (
             "unambiguous original",
             "stream-copy remux",
             "lossy conversion",
-            "Treat that signed link as a credential",
+            "Treat the returned link as a short-lived credential",
         ):
-            self.assertIn(phrase, skill)
+            self.assertIn(phrase, api_reference)
         self.assertIn("--batch-file -", skill)
         self.assertIn("--url-stdin", recovery)
         self.assertIn("env -u KINESCOPE_URL", recovery)
-        self.assertIn("command history", recovery)
+        self.assertIn("yt-dlp.conf", recovery)
+        self.assertIn("Embedding page URL", recovery)
+        self.assertIn('--config-locations "$referer_config"', recovery)
+        self.assertIn("unset safe_referrer", recovery)
+        self.assertIn("set +x\nset -euo pipefail", recovery)
+        self.assertEqual(recovery.count("env -u KINESCOPE_URL -u KINESCOPE_REFERRER -u REFERRER_URL -u safe_referrer yt-dlp"), 1)
+        self.assertIn("set +x", recovery)
+        self.assertNotIn('--referer "$KINESCOPE_REFERRER"', recovery)
+        self.assertIn("shell history", recovery)
+
+    def test_default_download_is_quiet_and_uses_stdin_for_share_urls(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        self.assertIn("--quiet --no-progress --no-playlist", skill)
+        self.assertIn("--batch-file -", skill)
+        self.assertIn("set +x", skill)
+        self.assertIn("after_move:filepath", skill)
+        self.assertIn("ffprobe` once", skill)
+        self.assertIn("record its exit code", skill)
+        for reference in ("references/api-original.md", "references/playlist-status.md", "references/vpn-routing.md"):
+            self.assertIn(reference, skill)
+
+    @unittest.skipUnless(hasattr(pty, "fork"), "requires a POSIX pseudo-terminal")
+    def test_default_download_prompt_hides_url_from_argv_environment_and_xtrace(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        block = skill.split("```bash\n", 1)[1].split("\n```", 1)[0]
+        secret = "https://kinescope.io/share?access_token=stdin-sentinel"
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            bindir = root / "bin"
+            bindir.mkdir()
+            capture = root / "capture.json"
+            output = root / "%(title)s-%(id)s.%(ext)s"
+            block = block.replace("'/path/to/output/%(title)s-%(id)s.%(ext)s'", shlex.quote(str(output)))
+            fake_ytdlp = bindir / "yt-dlp"
+            fake_ytdlp.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, sys\n"
+                "url = sys.stdin.readline().rstrip('\\n')\n"
+                "json.dump({'argv': sys.argv[1:], 'url': url, 'env': {key: os.environ.get(key) for key in "
+                "('KINESCOPE_URL', 'KINESCOPE_REFERRER', 'REFERRER_URL', 'safe_referrer')}}, "
+                "open(os.environ['CAPTURE'], 'w'))\n",
+                encoding="utf-8",
+            )
+            fake_ytdlp.chmod(0o700)
+            environment = os.environ.copy()
+            environment.update({
+                "PATH": f"{bindir}:{environment['PATH']}",
+                "CAPTURE": str(capture),
+                "KINESCOPE_URL": "old-url-sentinel",
+                "KINESCOPE_REFERRER": "old-referrer-sentinel",
+                "REFERRER_URL": "old-referrer-env-sentinel",
+                "safe_referrer": "old-safe-referrer-sentinel",
+            })
+            pid, master_fd = pty.fork()
+            if pid == 0:
+                os.execvpe("bash", ["bash", "-c", "set -x\n" + block], environment)
+
+            output_bytes = bytearray()
+            sent = False
+            deadline = time.monotonic() + 15
+            status = None
+            try:
+                while time.monotonic() < deadline:
+                    readable, _, _ = select.select([master_fd], [], [], 0.1)
+                    if readable:
+                        try:
+                            chunk = os.read(master_fd, 4096)
+                        except OSError:
+                            chunk = b""
+                        output_bytes.extend(chunk)
+                        if not sent and b"Kinescope share/embed URL:" in output_bytes:
+                            time.sleep(0.2)
+                            os.write(master_fd, secret.encode() + b"\n")
+                            sent = True
+                    waited_pid, child_status = os.waitpid(pid, os.WNOHANG)
+                    if waited_pid == pid:
+                        status = child_status
+                        break
+                self.assertTrue(sent, "URL prompt did not appear in the pseudo-terminal")
+                self.assertIsNotNone(status, "download command did not exit")
+                self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+            finally:
+                if status is None:
+                    os.kill(pid, 9)
+                    os.waitpid(pid, 0)
+                os.close(master_fd)
+
+            output_text = output_bytes.decode(errors="replace")
+            self.assertNotIn(secret, output_text)
+            captured = json.loads(capture.read_text(encoding="utf-8"))
+            self.assertEqual(captured["url"], secret)
+            self.assertNotIn(secret, captured["argv"])
+            self.assertEqual(captured["env"], {
+                "KINESCOPE_URL": None,
+                "KINESCOPE_REFERRER": None,
+                "REFERRER_URL": None,
+                "safe_referrer": None,
+            })
 
     def test_local_history_is_opt_in_and_documented(self):
         skill = SKILL.read_text(encoding="utf-8")

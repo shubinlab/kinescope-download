@@ -7,7 +7,7 @@ import html
 import os
 import re
 import sys
-from urllib.parse import parse_qsl, urljoin, urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
@@ -45,11 +45,6 @@ def prepare_referrer(value: str) -> str:
         ):
             raise ValueError
         parsed.port  # force validation of a malformed port before using the URL
-        sensitive = ("token", "secret", "password", "passwd", "auth", "signature", "credential", "cookie", "jwt", "session")
-        for key, _ in parse_qsl(parsed.query, keep_blank_values=True):
-            normalized = re.sub(r"[^a-z0-9]", "", key.lower())
-            if normalized == "key" or normalized.endswith("key") or any(marker in normalized for marker in sensitive):
-                raise ValueError
         # Do not send query credentials with a caller-supplied page URL. Keep the
         # origin/path needed by embed referrer checks, but remove query/fragment.
         return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
@@ -65,29 +60,21 @@ class TrustedRedirects(HTTPRedirectHandler):
 
 
 def main(argv: list[str]) -> int:
-    if argv and argv[0] == "--url-stdin":
-        if len(argv) not in (2, 3):
-            print("Usage: extract_manifest.py --url-stdin OUTPUT_FILE [REFERRER_URL]", file=sys.stderr)
-            return 2
-        _, output_path, *referrer = argv
-        page_url = sys.stdin.readline(16_385).rstrip("\r\n")
-        if len(page_url) > 16_384 or "\n" in page_url or "\r" in page_url:
-            print("Page URL input is too long or malformed.", file=sys.stderr)
-            return 1
-    else:
-        if len(argv) not in (2, 3):
-            print("Usage: extract_manifest.py KINESCOPE_URL OUTPUT_FILE [REFERRER_URL]", file=sys.stderr)
-            return 2
-        page_url, output_path, *referrer = argv
-        try:
-            parsed_page_url = urlsplit(page_url)
-        except ValueError:
-            parsed_page_url = None
-        if parsed_page_url is not None and (parsed_page_url.query or parsed_page_url.fragment):
-            print("Page URLs with a query or fragment must be provided through --url-stdin.", file=sys.stderr)
-            return 1
+    if not argv or argv[0] != "--url-stdin" or len(argv) not in (2, 3):
+        print("Usage: extract_manifest.py --url-stdin OUTPUT_FILE [REFERRER_OUTPUT_FILE]", file=sys.stderr)
+        return 2
+    _, output_path, *referrer_output = argv
+    referrer_output_path = referrer_output[0] if referrer_output else None
+    page_url = sys.stdin.readline(16_385).rstrip("\r\n")
+    if len(page_url) > 16_384 or "\n" in page_url or "\r" in page_url:
+        print("Page URL input is too long or malformed.", file=sys.stderr)
+        return 1
+    raw_referrer = sys.stdin.readline(16_385).rstrip("\r\n")
+    if len(raw_referrer) > 16_384 or "\n" in raw_referrer or "\r" in raw_referrer:
+        print("Referrer input is too long or malformed.", file=sys.stderr)
+        return 1
 
-    referrer_url = referrer[0] if referrer else ""
+    referrer_url = raw_referrer
     if not trusted_https_url(page_url):
         print("Page URL must use HTTPS on a recognized Kinescope host.", file=sys.stderr)
         return 1
@@ -96,8 +83,14 @@ def main(argv: list[str]) -> int:
     except ValueError as error:
         print(str(error), file=sys.stderr)
         return 1
+    if referrer_output_path == output_path:
+        print("Manifest and referrer output files must be different.", file=sys.stderr)
+        return 1
     if os.path.lexists(output_path):
         print("Output file already exists; refusing to overwrite it.", file=sys.stderr)
+        return 1
+    if referrer_output_path and os.path.lexists(referrer_output_path):
+        print("Referrer output file already exists; refusing to overwrite it.", file=sys.stderr)
         return 1
 
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -140,6 +133,15 @@ def main(argv: list[str]) -> int:
     except OSError as error:
         print(f"Could not create the private output file: {error}", file=sys.stderr)
         return 1
+    if referrer_output_path:
+        try:
+            descriptor = os.open(referrer_output_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                if referrer_url:
+                    output.write(referrer_url + "\n")
+        except OSError:
+            print("Could not create the private referrer file.", file=sys.stderr)
+            return 1
     print("One Kinescope master manifest saved to the private temporary file")
     return 0
 

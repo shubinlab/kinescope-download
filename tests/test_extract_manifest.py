@@ -38,17 +38,18 @@ class ExtractManifestTests(unittest.TestCase):
 
     def test_private_page_url_is_rejected_before_any_request(self):
         with patch.object(extract_manifest, "build_opener") as build_opener:
-            status = extract_manifest.main(["http://127.0.0.1:8080/", "/tmp/manifest"])
+            with patch("sys.stdin", new=io.StringIO("http://127.0.0.1:8080/\n\n")):
+                status = extract_manifest.main(["--url-stdin", "/tmp/manifest"])
         self.assertEqual(status, 1)
         build_opener.assert_not_called()
 
-    def test_positional_url_with_query_is_rejected_before_any_request(self):
+    def test_helper_rejects_positional_url_without_echoing_it(self):
         signed_url = "https://kinescope.io/video?token=private"
         stderr = io.StringIO()
         with patch.object(extract_manifest, "build_opener") as build_opener:
             with patch("sys.stderr", new=stderr):
                 status = extract_manifest.main([signed_url, "/tmp/manifest"])
-        self.assertEqual(status, 1)
+        self.assertEqual(status, 2)
         self.assertNotIn("token=private", stderr.getvalue())
         build_opener.assert_not_called()
 
@@ -87,6 +88,45 @@ class ExtractManifestTests(unittest.TestCase):
             self.assertEqual(output.read_text(encoding="utf-8"), "https://cdn.kinescope.io/master.m3u8\n")
             self.assertNotIn("token=private", stdout.getvalue() + stderr.getvalue())
 
+    def test_referrer_query_is_sanitized_from_stdin_to_private_file(self):
+        page_url = "https://kinescope.io/video?token=page-secret"
+        referrer = "https://course.example/watch?access_token=ref-secret#fragment"
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+            def geturl(self):
+                return "https://kinescope.io/video"
+
+            def read(self, _limit):
+                return b'"https://cdn.kinescope.io/master.m3u8"'
+
+        class Opener:
+            def open(self, request, **_kwargs):
+                self.referer = request.get_header("Referer")
+                return Response()
+
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "manifest.txt"
+            safe_referer = Path(temp) / "referer.txt"
+            opener = Opener()
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch.object(extract_manifest, "build_opener", return_value=opener):
+                with patch("sys.stdin", new=io.StringIO(page_url + "\n" + referrer + "\n")):
+                    with patch("sys.stdout", new=stdout), patch("sys.stderr", new=stderr):
+                        status = extract_manifest.main(["--url-stdin", str(output), str(safe_referer)])
+            self.assertEqual(status, 0)
+            self.assertEqual(opener.referer, "https://course.example/watch")
+            self.assertEqual(safe_referer.read_text(encoding="utf-8"), "https://course.example/watch\n")
+            self.assertEqual(stat.S_IMODE(safe_referer.stat().st_mode), 0o600)
+            self.assertNotIn("page-secret", stdout.getvalue() + stderr.getvalue())
+            self.assertNotIn("ref-secret", stdout.getvalue() + stderr.getvalue())
+
     def test_network_error_text_is_not_echoed_when_it_contains_signed_url(self):
         signed_url = "https://kinescope.io/video?token=private"
 
@@ -105,18 +145,13 @@ class ExtractManifestTests(unittest.TestCase):
     def test_sensitive_or_credentialed_referrers_are_rejected_before_any_request(self):
         for referrer in (
             "https://user:pass@example.com/course",
-            "https://example.com/course?access_token=secret",
-            "https://example.com/course?api_key=secret",
-            "https://example.com/course?key=secret",
-            "https://example.com/course?accessKey=secret",
             "file:///tmp/private",
         ):
             with self.subTest(referrer=referrer):
                 with patch.object(extract_manifest, "build_opener") as build_opener:
                     with patch("sys.stderr", new_callable=io.StringIO):
-                        status = extract_manifest.main(
-                            ["https://kinescope.io/video", "/tmp/manifest", referrer]
-                        )
+                        with patch("sys.stdin", new=io.StringIO("https://kinescope.io/video\n" + referrer + "\n")):
+                            status = extract_manifest.main(["--url-stdin", "/tmp/manifest"])
                 self.assertEqual(status, 1)
                 build_opener.assert_not_called()
 
@@ -169,7 +204,8 @@ class ExtractManifestTests(unittest.TestCase):
 
         with patch.object(extract_manifest, "build_opener", return_value=Opener()):
             with patch("sys.stderr", new_callable=io.StringIO):
-                status = extract_manifest.main(["https://kinescope.io/video", "/tmp/manifest"])
+                with patch("sys.stdin", new=io.StringIO("https://kinescope.io/video\n\n")):
+                    status = extract_manifest.main(["--url-stdin", "/tmp/manifest"])
         self.assertEqual(status, 1)
         self.assertEqual(response.read_limit, extract_manifest.MAX_PAGE_BYTES + 1)
 
@@ -198,7 +234,8 @@ class ExtractManifestTests(unittest.TestCase):
             stdout = io.StringIO()
             with patch.object(extract_manifest, "build_opener", return_value=Opener()):
                 with patch("sys.stdout", new=stdout):
-                    status = extract_manifest.main(["https://kinescope.io/video", str(output)])
+                    with patch("sys.stdin", new=io.StringIO("https://kinescope.io/video\n\n")):
+                        status = extract_manifest.main(["--url-stdin", str(output)])
             self.assertEqual(status, 0)
             self.assertEqual(output.read_text(encoding="utf-8"), signed_url + "\n")
             self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
@@ -227,7 +264,8 @@ class ExtractManifestTests(unittest.TestCase):
             output.write_text("keep this file\n", encoding="utf-8")
             with patch.object(extract_manifest, "build_opener", return_value=Opener()) as build_opener:
                 with patch("sys.stderr", new_callable=io.StringIO):
-                    status = extract_manifest.main(["https://kinescope.io/video", str(output)])
+                    with patch("sys.stdin", new=io.StringIO("https://kinescope.io/video\n\n")):
+                        status = extract_manifest.main(["--url-stdin", str(output)])
             self.assertEqual(status, 1)
             self.assertEqual(output.read_text(encoding="utf-8"), "keep this file\n")
             build_opener.assert_not_called()
