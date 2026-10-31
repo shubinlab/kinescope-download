@@ -158,6 +158,7 @@ class PackageTests(unittest.TestCase):
                             chunk = b""
                         output_bytes.extend(chunk)
                         if not sent and b"Kinescope share/embed URL:" in output_bytes:
+                            time.sleep(0.2)
                             os.write(master_fd, secret.encode() + b"\n")
                             sent = True
                     waited_pid, child_status = os.waitpid(pid, os.WNOHANG)
