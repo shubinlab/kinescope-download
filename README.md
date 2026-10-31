@@ -1,6 +1,6 @@
 <div align="center">
   <img src="assets/logo.svg" width="420" alt="Kinescope Download">
-  <p><strong>The careful, fast path from a Kinescope player link to a verified MP4.</strong></p>
+  <p><strong>One command installs the shared Kinescope skill and download tools for Codex or Claude Code.</strong></p>
   <p>
     <a href="https://github.com/shubinlab/kinescope-download/actions"><img src="https://img.shields.io/github/actions/workflow/status/shubinlab/kinescope-download/ci.yml?branch=main&label=checks" alt="Checks"></a>
     <img src="https://img.shields.io/badge/Linux-supported-4c9a6a" alt="Linux supported">
