@@ -70,7 +70,7 @@ if [ ! -f "$SCRIPT_DIR/scripts/install.py" ]; then
     fi
   done
   [ -n "$source_dir" ] || fail 'the downloaded archive did not contain the installer.'
-  KINESCOPE_SOURCE_BOOTSTRAP=1 sh "$source_dir/install.sh" "$@"
+  sh "$source_dir/install.sh" "$@"
   exit $?
 fi
 
