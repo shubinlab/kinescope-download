@@ -9,7 +9,7 @@ Ship one public Git repository that installs the authorized Kinescope download w
 - The repository root is a marketplace for Codex and Claude Code.
 - `plugins/kinescope-download/` is the installable plugin package. It contains one shared skill, its focused references, a portable Codex `plugin.json`, and Claude Code's `.claude-plugin/plugin.json`.
 - `.agents/plugins/marketplace.json` and `.claude-plugin/marketplace.json` expose that same plugin to their respective clients.
-- `install.sh` preflights the JSON state of every selected client before changing either profile, then registers and installs the plugin in whichever supported client the user selects or already has. System media tools are checked separately and installed only through an explicit `--with-deps` option.
+- `install.sh` is the POSIX-shell bootstrap and package entry point. It can fetch the versioned source archive without Git, add missing Git/Python through an identified native manager, and then run the Python installer. If no client is present, the user chooses which official client installer to run; authentication stays user-controlled. The Python installer preflights selected client state before changing either profile. Media tools remain explicit through `--with-deps`.
 - `README.md` is the human entrypoint; CLI installers and documented manual commands must produce the same user-scope installation.
 
 ## Runtime and safety boundaries
@@ -24,8 +24,8 @@ Ship one public Git repository that installs the authorized Kinescope download w
 ## Red-team review focus
 
 - Repeated installation must not duplicate marketplaces or report success after a failed client command.
-- Missing one client must not block installation into the other; missing both must fail clearly.
+- When no client is present, interactive runs ask which one to install and noninteractive runs require `--codex`, `--claude`, or `--all`; installing a CLI must never authenticate the user.
 - Paths with spaces, hostile shell arguments, malformed JSON, and valid-but-wrong client JSON shapes must not cause word splitting, arbitrary command execution, or partial setup.
 - The 403 helper must reject local/private/lookalike destinations before fetching, validate redirects, limit response size, and keep signed manifest URLs out of output.
-- Dependencies must never be installed unless `--with-deps` was explicitly supplied; unknown Linux package managers must stop safely.
-- Marketplace paths must stay inside the package, and installers must never fetch and execute a remote shell script.
+- Media dependencies must never be installed unless `--with-deps` was explicitly supplied; bootstrap tools use only a positively identified supported package manager, with immutable or ambiguous Linux systems failing closed.
+- Marketplace paths must stay inside the package. Official Codex and Claude installer scripts may be downloaded only over HTTPS to a temporary file and executed only after HTTPS redirect, response-size, and shebang checks; never execute them through a remote shell pipe.

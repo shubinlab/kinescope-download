@@ -1,13 +1,15 @@
 import os
 import platform
 import shutil
+import shlex
 import subprocess
 import tempfile
+import tarfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -146,6 +148,81 @@ esac
         self.assertIn("python3:", result.stdout)
         self.assertIn("yt-dlp:", result.stdout)
 
+    def test_no_client_cli_prompts_for_an_explicit_selection(self):
+        from scripts import install
+
+        args = install.parse_args([])
+        fake_stdin = MagicMock()
+        fake_stdin.isatty.return_value = True
+        with patch.object(install.shutil, "which", return_value=None):
+            with patch.object(install.sys, "stdin", fake_stdin):
+                with patch("builtins.input", return_value="2"):
+                    with redirect_stdout(StringIO()):
+                        self.assertEqual(install.selected_clients(args), ["claude"])
+
+    def test_noninteractive_run_without_a_client_requires_an_explicit_flag(self):
+        from scripts import install
+
+        args = install.parse_args([])
+        fake_stdin = MagicMock()
+        fake_stdin.isatty.return_value = False
+        with patch.object(install.shutil, "which", return_value=None):
+            with patch.object(install.sys, "stdin", fake_stdin):
+                with self.assertRaisesRegex(install.InstallError, "--codex, --claude, or --all"):
+                    install.selected_clients(args)
+
+    def test_selected_missing_cli_uses_bounded_https_official_installer(self):
+        from scripts import install
+
+        home = self.base / "isolated-home"
+        local_bin = home / ".local" / "bin"
+        local_bin.mkdir(parents=True)
+        payload = b"#!/bin/sh\nexit 0\n"
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = payload
+        response.geturl.return_value = "https://chatgpt.com/codex/install.sh"
+
+        def run_installer(command, **kwargs):
+            if command[1].endswith("install.sh"):
+                write_executable(local_bin / "codex", "#!/bin/sh\nprintf 'codex 2.0.0\\n'\n")
+                return subprocess.CompletedProcess(command, 0, "", "")
+            return subprocess.CompletedProcess(command, 0, "codex 2.0.0\n", "")
+
+        previous_path = os.environ.get("PATH", "")
+        with patch.dict(os.environ, {"PATH": previous_path}):
+            with patch.object(install.Path, "home", return_value=home):
+                with patch.object(install, "urlopen", return_value=response) as mocked_urlopen:
+                    with patch.object(install.subprocess, "run", side_effect=run_installer):
+                        with redirect_stdout(StringIO()):
+                            install.install_client_cli("codex", False)
+                    self.assertIn(str(local_bin), os.environ["PATH"])
+
+        mocked_urlopen.assert_called_once_with(install.CLIENT_INSTALLERS["codex"][0], timeout=30)
+
+    def test_selected_missing_cli_rejects_untrusted_https_redirect_host(self):
+        from scripts import install
+
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = b"#!/bin/sh\nexit 0\n"
+        for final_url in ("https://example.invalid/install.sh", "http://chatgpt.com/install.sh"):
+            with self.subTest(final_url=final_url):
+                response.geturl.return_value = final_url
+                with patch.object(install, "urlopen", return_value=response):
+                    with patch.object(install.subprocess, "run") as mocked_run:
+                        with self.assertRaisesRegex(install.InstallError, "trusted HTTPS hosts"):
+                            install.install_client_cli("codex", False)
+                mocked_run.assert_not_called()
+                response.read.assert_not_called()
+
+    def test_dry_run_does_not_fetch_missing_client_installer(self):
+        from scripts import install
+
+        with patch.object(install, "urlopen") as mocked_urlopen:
+            install.install_client_cli("claude", True)
+        mocked_urlopen.assert_not_called()
+
     def test_platform_summary_includes_linux_distribution_release_and_manager(self):
         from scripts import install
 
@@ -252,6 +329,30 @@ esac
             with patch.object(install, "linux_release_info", return_value={"ID": "opensuse-microos"}):
                 self.assertIsNone(install.package_manager_command("Linux"))
 
+    def test_known_image_based_distro_ids_are_excluded_before_family_fallback(self):
+        from scripts import install
+
+        with patch.object(install.shutil, "which", return_value="/usr/bin/pacman"):
+            for distro_id, id_like in (
+                ("nixos", ""), ("steamos", "arch"), ("bazzite", "fedora"),
+                ("aurora", "fedora"), ("bluefin", "fedora"), ("ublue", "fedora"),
+                ("ublue-os", "fedora"), ("ucore", "fedora"),
+            ):
+                with self.subTest(distro_id=distro_id):
+                    with patch.object(install, "linux_release_info", return_value={"ID": distro_id, "ID_LIKE": id_like}):
+                        self.assertIsNone(install.package_manager_command("Linux"))
+
+    def test_shell_and_python_share_the_same_immutable_distro_exclusions(self):
+        from scripts import install
+
+        shell = (ROOT / "install.sh").read_text(encoding="utf-8")
+        for distro_id in install.IMMUTABLE_LINUX_IDS | install.IMMUTABLE_LINUX_VARIANTS:
+            with self.subTest(distro_id=distro_id):
+                self.assertIn(distro_id, shell)
+        for distro_id in install.LINUX_PACKAGE_MANAGERS:
+            with self.subTest(distro_id=distro_id):
+                self.assertIn(distro_id, shell)
+
     def test_immutable_id_like_derivative_is_excluded_by_variant(self):
         from scripts import install
 
@@ -339,9 +440,13 @@ esac
         if not dirname:
             self.skipTest("dirname is required by the shell entry point")
         (self.bin / "dirname").symlink_to(dirname)
+        for command in ("id", "git"):
+            executable = shutil.which(command)
+            if executable:
+                (self.bin / command).symlink_to(executable)
+        (self.bin / "python3").symlink_to(os.sys.executable)
         env = self.env.copy()
         env["PATH"] = str(self.bin)
-        env["KINESCOPE_PYTHON"] = os.sys.executable
 
         first = self.run_installer("--with-deps", env=env)
         self.assertEqual(first.returncode, 0, first.stderr)
@@ -360,6 +465,142 @@ esac
         self.assertIn(package_command, calls_after_first)
         self.assertEqual(calls_after_first.count("yt-dlp ffmpeg"), calls_after_second.count("yt-dlp ffmpeg"))
         self.assertEqual(calls_after_second.count("codex plugin add kinescope-download@kinescope-download"), 1, calls_after_second)
+
+    def test_shell_bootstrap_installs_missing_git_and_python_with_omarchy_manager(self):
+        bootstrap_bin = self.base / "bootstrap-bin"
+        bootstrap_bin.mkdir()
+        for command in ("dirname", "id", "sed", "head", "tr", "ln"):
+            executable = shutil.which(command)
+            self.assertIsNotNone(executable, command)
+            (bootstrap_bin / command).symlink_to(executable)
+        write_executable(bootstrap_bin / "uname", "#!/bin/sh\nprintf 'Linux\\n'\n")
+        shutil.copy2(self.bin / "codex", bootstrap_bin / "codex")
+        write_executable(bootstrap_bin / "omarchy", f'''#!/bin/sh
+set -eu
+printf 'omarchy %s\\n' "$*" >> "$KINESCOPE_TEST_LOG"
+test "$*" = 'pkg add git python'
+ln -s {os.sys.executable!s} "$KINESCOPE_TEST_BIN/python3"
+ln -s {shutil.which("git")!s} "$KINESCOPE_TEST_BIN/git"
+''')
+        root = self.base / "bootstrap-checkout"
+        root.mkdir()
+        (root / "scripts").mkdir()
+        release_dir = tempfile.TemporaryDirectory(prefix="kinescope-release-")
+        self.addCleanup(release_dir.cleanup)
+        release_file = Path(release_dir.name) / "os-release"
+        release_file.write_text('ID=omarchy\nID_LIKE=arch\n', encoding="utf-8")
+        shell_source = (ROOT / "install.sh").read_text(encoding="utf-8")
+        shell_source = shell_source.replace("/etc/os-release", f'"{release_file}"')
+        (root / "install.sh").write_text(shell_source, encoding="utf-8")
+        (root / "install.sh").chmod(0o755)
+        shutil.copy2(ROOT / "scripts/install.py", root / "scripts/install.py")
+        env = self.env.copy()
+        env.update({
+            "PATH": str(bootstrap_bin),
+            "KINESCOPE_TEST_BIN": str(bootstrap_bin),
+        })
+        result = self.run_installer("--codex", cwd=root, env=env, installer_root=root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("omarchy pkg add git python", self.calls())
+        self.assertIn("codex plugin add kinescope-download@kinescope-download", self.calls())
+        self.assertTrue((bootstrap_bin / "python3").is_file())
+        self.assertTrue((bootstrap_bin / "git").is_file())
+
+    def test_shell_bootstrap_dry_run_reports_missing_tools_without_installing(self):
+        bootstrap_bin = self.base / "bootstrap-dry-run-bin"
+        bootstrap_bin.mkdir()
+        for command in ("dirname", "id", "sed", "head", "tr"):
+            executable = shutil.which(command)
+            self.assertIsNotNone(executable, command)
+            (bootstrap_bin / command).symlink_to(executable)
+        write_executable(bootstrap_bin / "uname", "#!/bin/sh\nprintf 'Linux\\n'\n")
+        write_executable(bootstrap_bin / "omarchy", "#!/bin/sh\nexit 0\n")
+        root = self.base / "bootstrap-dry-run-checkout"
+        root.mkdir()
+        (root / "scripts").mkdir()
+        release_dir = tempfile.TemporaryDirectory(prefix="kinescope-release-")
+        self.addCleanup(release_dir.cleanup)
+        release_file = Path(release_dir.name) / "os-release"
+        release_file.write_text('ID=omarchy\nID_LIKE=arch\n', encoding="utf-8")
+        shell_source = (ROOT / "install.sh").read_text(encoding="utf-8")
+        shell_source = shell_source.replace("/etc/os-release", f'"{release_file}"')
+        (root / "install.sh").write_text(shell_source, encoding="utf-8")
+        (root / "install.sh").chmod(0o755)
+        (root / "scripts/install.py").write_text("raise SystemExit('must not run during bootstrap dry-run')\n", encoding="utf-8")
+        env = self.env.copy()
+        env["PATH"] = str(bootstrap_bin)
+        result = self.run_installer("--dry-run", cwd=root, env=env, installer_root=root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Would run: omarchy pkg add git python", result.stdout)
+        self.assertIn("No bootstrap packages were installed", result.stdout)
+        self.assertNotIn("omarchy ", self.calls())
+
+    def test_shell_rejects_unknown_or_conflicting_flags_before_bootstrap(self):
+        bootstrap_bin = self.base / "bootstrap-invalid-bin"
+        bootstrap_bin.mkdir()
+        for command in ("dirname",):
+            executable = shutil.which(command)
+            self.assertIsNotNone(executable, command)
+            (bootstrap_bin / command).symlink_to(executable)
+        root = self.base / "bootstrap-invalid-checkout"
+        root.mkdir()
+        shutil.copy2(ROOT / "install.sh", root / "install.sh")
+        env = self.env.copy()
+        env["PATH"] = str(bootstrap_bin)
+        for args in (("--unknown",), ("--codex", "--all")):
+            with self.subTest(args=args):
+                result = self.run_installer(*args, cwd=root, env=env, installer_root=root)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("omarchy pkg add", self.calls())
+
+    def test_shell_archive_bootstrap_runs_without_git_or_python(self):
+        bootstrap_bin = self.base / "archive-bootstrap-bin"
+        bootstrap_bin.mkdir()
+        for command in ("dirname", "id", "mktemp", "tar", "gzip", "rm", "sh"):
+            executable = shutil.which(command)
+            self.assertIsNotNone(executable, command)
+            (bootstrap_bin / command).symlink_to(executable)
+
+        source = self.base / "fixture-archive" / "kinescope-download-1.4.0"
+        (source / "scripts").mkdir(parents=True)
+        (source / "scripts/install.py").write_text("# fixture archive source\n", encoding="utf-8")
+        source_script = source / "install.sh"
+        source_script.write_text(
+            "#!/bin/sh\n"
+            "printf 'archive source v1.4.0\\n'\n"
+            "printf 'args: %s\\n' \"$*\"\n",
+            encoding="utf-8",
+        )
+        archive = self.base / "fixture-source.tar.gz"
+        with tarfile.open(archive, "w:gz") as bundle:
+            bundle.add(source, arcname=source.name)
+
+        curl_script = (
+            "#!/bin/sh\n"
+            "set -eu\n"
+            "destination=\n"
+            "while [ \"$#\" -gt 0 ]; do\n"
+            "  if [ \"$1\" = --output ]; then destination=$2; shift 2; else shift; fi\n"
+            "done\n"
+            f"/bin/cp {shlex.quote(str(archive))} \"$destination\"\n"
+            "printf '%s' 'https://codeload.github.com/shubinlab/kinescope-download/tar.gz/refs/tags/v1.4.0'\n"
+        )
+        write_executable(bootstrap_bin / "curl", curl_script)
+        bootstrap_root = self.base / "raw-installer"
+        bootstrap_root.mkdir()
+        bootstrap_script = bootstrap_root / "install.sh"
+        shutil.copy2(ROOT / "install.sh", bootstrap_script)
+        env = self.env.copy()
+        env["PATH"] = str(bootstrap_bin)
+        result = subprocess.run(
+            [str(bootstrap_script), "--codex"], cwd=bootstrap_root, env=env,
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("archive source v1.4.0", result.stdout)
+        self.assertIn("args: --codex", result.stdout)
+        self.assertFalse((bootstrap_bin / "git").exists())
+        self.assertFalse((bootstrap_bin / "python3").exists())
 
     def test_failed_child_output_is_suppressed_for_stdout_and_stderr(self):
         from scripts.install import InstallError, run
@@ -386,15 +627,16 @@ esac
         self.assertIn("codex", calls)
         self.assertNotIn("claude", calls)
 
-    def test_explicit_missing_client_fails_before_mutation(self):
+    def test_explicit_missing_client_is_planned_without_fetching_in_dry_run(self):
         env = self.env.copy()
         env["PATH"] = str(self.bin / "only-codex")
         only_codex = Path(env["PATH"])
         only_codex.mkdir()
         shutil.copy2(self.bin / "codex", only_codex / "codex")
         (only_codex / "codex").chmod(0o755)
-        result = self.run_python_installer("--claude", env=env)
-        self.assertNotEqual(result.returncode, 0)
+        result = self.run_python_installer("--claude", "--dry-run", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Would install missing claude CLI", result.stdout)
         self.assertEqual(self.calls(), "")
 
     def test_dependency_install_is_explicit_and_uses_detected_native_helper(self):

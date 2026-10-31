@@ -12,12 +12,24 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
+from urllib.error import URLError
+from urllib.request import urlopen
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 PLUGIN = "kinescope-download"
 MARKETPLACE = "kinescope-download"
 MARKETPLACE_SOURCE = "shubinlab/kinescope-download"
+CLIENT_INSTALLERS = {
+    "codex": ("https://chatgpt.com/codex/install.sh", "/bin/sh"),
+    "claude": ("https://claude.ai/install.sh", "/bin/bash"),
+}
+CLIENT_INSTALLER_HOSTS = {
+    "codex": {"chatgpt.com", "releases.openai.com"},
+    "claude": {"claude.ai", "downloads.claude.ai"},
+}
 MEDIA_TOOLS = ("yt-dlp", "ffmpeg", "ffprobe")
 VERSION_COMMANDS = {
     "git": ("--version",),
@@ -51,7 +63,12 @@ LINUX_PACKAGE_MANAGERS = {
     "sles": "zypper",
     "sled": "zypper",
 }
-IMMUTABLE_LINUX_IDS = {"opensuse-microos", "opensuse-aeon", "opensuse-kalpa"}
+IMMUTABLE_LINUX_IDS = {
+    "opensuse-microos", "opensuse-aeon", "opensuse-kalpa",
+    "nixos", "steamos", "bazzite", "aurora", "bluefin", "ublue", "ublue-os", "ucore",
+    "fedora-silverblue", "fedora-kinoite", "fedora-sericea", "fedora-onyx",
+    "fedora-coreos", "fedora-iot",
+}
 IMMUTABLE_LINUX_VARIANTS = {
     "silverblue", "kinoite", "sericea", "onyx", "coreos", "iot",
     "microos", "microos-desktop", "aeon", "kalpa",
@@ -67,9 +84,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         description="Install the Kinescope Download plugin in Codex and/or Claude Code."
     )
     selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--codex", action="store_true", help="Install in Codex only.")
-    selection.add_argument("--claude", action="store_true", help="Install in Claude Code only.")
-    selection.add_argument("--all", action="store_true", help="Install in both clients; both must be present.")
+    selection.add_argument("--codex", action="store_true", help="Install in Codex only; add its CLI if missing.")
+    selection.add_argument("--claude", action="store_true", help="Install in Claude Code only; add its CLI if missing.")
+    selection.add_argument("--all", action="store_true", help="Install in both clients; add either CLI if missing.")
     parser.add_argument(
         "--with-deps",
         action="store_true",
@@ -427,12 +444,72 @@ def selected_clients(args: argparse.Namespace) -> list[str]:
     else:
         requested = [name for name in ("codex", "claude") if shutil.which(name)]
         if not requested:
-            raise InstallError("Neither `codex` nor `claude` is installed. Install a client, then rerun install.sh.")
-
-    missing = [name for name in requested if not shutil.which(name)]
-    if missing:
-        raise InstallError("Requested client not found: " + ", ".join(missing))
+            if not sys.stdin.isatty():
+                raise InstallError(
+                    "No supported client CLI is installed. Rerun with --codex, --claude, or --all to install one."
+                )
+            print("No supported client CLI is installed. Which one should install.sh add?")
+            print("  1) Codex CLI")
+            print("  2) Claude Code")
+            print("  3) Both")
+            try:
+                choice = input("Choose 1, 2, or 3 [1]: ").strip() or "1"
+            except EOFError as error:
+                raise InstallError("No client was selected; rerun with --codex, --claude, or --all.") from error
+            choices = {"1": ["codex"], "2": ["claude"], "3": ["codex", "claude"]}
+            if choice not in choices:
+                raise InstallError("Choose 1, 2, or 3, then rerun install.sh.")
+            requested = choices[choice]
     return requested
+
+
+def install_client_cli(client: str, dry_run: bool) -> None:
+    installer_url, shell = CLIENT_INSTALLERS[client]
+    if dry_run:
+        print(f"Would install missing {client} CLI using its official installer.")
+        return
+    print(f"Installing missing {client} CLI using its official installer…")
+    try:
+        with urlopen(installer_url, timeout=30) as response:
+            final_url = response.geturl()
+            final_parts = urlparse(final_url)
+            if final_parts.scheme != "https" or final_parts.hostname not in CLIENT_INSTALLER_HOSTS[client]:
+                raise InstallError(f"The official {client} installer redirected outside its trusted HTTPS hosts.")
+            installer = response.read(4 * 1024 * 1024 + 1)
+    except (OSError, URLError) as error:
+        raise InstallError(f"Could not download the official {client} installer.") from error
+    if not installer or len(installer) > 4 * 1024 * 1024:
+        raise InstallError(f"The official {client} installer response was empty or unexpectedly large.")
+    if not installer.lstrip().startswith(b"#!"):
+        raise InstallError(f"The official {client} installer response was not a shell script.")
+    if not shutil.which(Path(shell).name):
+        raise InstallError(f"{Path(shell).name} is required to install {client}.")
+    with tempfile.TemporaryDirectory(prefix=f"kinescope-{client}-installer-") as directory:
+        installer_path = Path(directory) / "install.sh"
+        installer_path.write_bytes(installer)
+        environment = os.environ.copy()
+        if client == "codex":
+            environment["CODEX_NON_INTERACTIVE"] = "true"
+        try:
+            result = subprocess.run(
+                [shell, str(installer_path)],
+                check=False,
+                env=environment,
+                timeout=600,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise InstallError(f"The official {client} installer could not complete.") from error
+    if result.returncode:
+        raise InstallError(f"The official {client} installer failed; no plugin settings were changed.")
+
+    local_bin = Path.home() / ".local" / "bin"
+    if local_bin.is_dir() and str(local_bin) not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = f"{local_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+    if not shutil.which(client):
+        raise InstallError(
+            f"{client} was installed, but is not on this process's PATH. Start a new terminal and rerun install.sh."
+        )
+    print(f"{client}: installed ({command_version(client)})")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -442,14 +519,22 @@ def main(argv: list[str] | None = None) -> int:
             raise InstallError("Run install.sh as your normal user, not with sudo; package managers elevate only when needed.")
         print_environment_summary()
         clients = selected_clients(args)
-        # Read all current client state and dependency-manager support before changing either client's settings.
-        states = {client: inspect_client(client) for client in clients}
+        missing_clients = [client for client in clients if not shutil.which(client)]
         missing_tools = [tool for tool in MEDIA_TOOLS if not shutil.which(tool)]
         if args.with_deps and missing_tools:
             media_plan(media_packages_for_missing(missing_tools))
+        for client in missing_clients:
+            install_client_cli(client, args.dry_run)
+        if args.dry_run and missing_clients:
+            for client in missing_clients:
+                print(f"{client}: would register marketplace {MARKETPLACE} and install the plugin after CLI setup")
+            install_media_tools(args.with_deps, args.dry_run)
+            return 0
+        # Read all current client state and dependency-manager support before changing either client's settings.
+        states = {client: inspect_client(client) for client in clients}
+        install_media_tools(args.with_deps, args.dry_run)
         for client in clients:
             install_client(client, args.dry_run, states[client])
-        install_media_tools(args.with_deps, args.dry_run)
     except InstallError as error:
         print(f"Install failed: {error}", file=sys.stderr)
         return 1
