@@ -234,9 +234,10 @@ class PackageTests(unittest.TestCase):
     def test_readme_documents_single_script_install(self):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(
-            "curl --fail --silent --show-error --proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 0 https://raw.githubusercontent.com/shubinlab/kinescope-download/v1.5.0/install.sh | sh -s -- --with-deps",
+            "curl -fsSL https://shubin.co/k | sh -s -- --with-deps",
             text,
         )
+        self.assertIn("same `install.sh` published in release 1.5.0", text)
         self.assertIn("Use `--codex`, `--claude`, or `--all`", text)
         self.assertIn("It does not hand off to another installer or require Python", text)
         self.assertIn("It installs Git when missing", text)
