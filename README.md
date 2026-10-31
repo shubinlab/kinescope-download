@@ -21,7 +21,7 @@ Kinescope Download packages one shared skill for **Codex** and **Claude Code**. 
 One standalone POSIX shell script handles detection, prerequisite installation, client selection, media dependencies, and plugin setup. It does not hand off to another installer or require Python.
 
 ```sh
-installer=$(mktemp) && curl --fail --location --show-error --proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 0 https://raw.githubusercontent.com/shubinlab/kinescope-download/v1.5.0/install.sh --output "$installer" && sh "$installer" --with-deps; result=$?; rm -f "$installer"; exit "$result"
+curl --fail --silent --show-error --proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 0 https://raw.githubusercontent.com/shubinlab/kinescope-download/v1.5.0/install.sh | sh -s -- --with-deps
 ```
 
 The example installs missing media tools too; omit `--with-deps` if you only want the plugin. That flag may install system packages and request your normal `sudo` authentication. The script needs `curl` and a POSIX shell. It installs Git when missing because the client CLIs use Git for marketplace plugins. On macOS, Homebrew must already be installed if Git or media tools need installing; the script does not install or modify Homebrew. On Linux, it detects the distribution and package manager from `/etc/os-release`. It stops on Fedora Atomic variants, openSUSE MicroOS/Aeon/Kalpa, NixOS, SteamOS, and known Bazzite/Universal Blue IDs rather than changing an immutable base image.
