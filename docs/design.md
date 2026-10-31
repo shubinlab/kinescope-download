@@ -15,7 +15,7 @@ Ship one public Git repository that installs the authorized Kinescope download w
 ## Runtime and safety boundaries
 
 - The plugin is a skill-only package. It does not run an MCP server, background process, hook, or privileged command.
-- `yt-dlp` and FFmpeg are external media tools. The plugin must not install them silently; its installer offers dependency installation behind explicit opt-in.
+- `yt-dlp` and FFmpeg are external media tools. The installer installs missing tools by default through a detected native package manager and reports the package names before invoking it.
 - Downloads remain limited to media the user owns or is authorized to save. DRM/key circumvention and logging signed URLs or account credentials are out of scope.
 - The 403 helper fetches only HTTPS pages on allowlisted Kinescope domains, validates redirects and manifest hosts, and caps page reads at 8 MiB.
 - VPN changes stay domain-scoped, preserve ChatGPT's route, and require interface-aware evidence before claiming direct egress.
