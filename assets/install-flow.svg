@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" role="img" aria-labelledby="title desc">
+  <title id="title">Kinescope Download installation flow</title>
+  <desc id="desc">One terminal command detects the platform, installs missing tools and selected client applications, then installs the Kinescope skill.</desc>
+  <rect width="1000" height="330" rx="24" fill="#102a3b"/>
+  <text x="48" y="54" fill="#effffc" font-family="system-ui, sans-serif" font-size="23" font-weight="700">WHAT THE ONE COMMAND DOES</text>
+  <g font-family="system-ui, sans-serif">
+    <g transform="translate(40 88)">
+      <rect width="214" height="170" rx="16" fill="#19394b" stroke="#2a5a69"/>
+      <circle cx="28" cy="30" r="16" fill="#38cfc4"/><text x="28" y="36" text-anchor="middle" fill="#102a3b" font-size="16" font-weight="800">1</text>
+      <text x="22" y="78" fill="#effffc" font-size="19" font-weight="700">Detect</text>
+      <text x="22" y="108" fill="#b9d2d6" font-size="15">macOS or Linux</text>
+      <text x="22" y="132" fill="#b9d2d6" font-size="15">and package manager</text>
+    </g>
+    <path d="M263 173h28m-8-8 8 8-8 8" fill="none" stroke="#38cfc4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(297 88)">
+      <rect width="214" height="170" rx="16" fill="#19394b" stroke="#2a5a69"/>
+      <circle cx="28" cy="30" r="16" fill="#38cfc4"/><text x="28" y="36" text-anchor="middle" fill="#102a3b" font-size="16" font-weight="800">2</text>
+      <text x="22" y="78" fill="#effffc" font-size="17" font-weight="700">Install missing tools</text>
+      <text x="22" y="108" fill="#b9d2d6" font-size="15">Git, client CLI(s),</text>
+      <text x="22" y="132" fill="#b9d2d6" font-size="15">yt-dlp and FFmpeg</text>
+    </g>
+    <path d="M520 173h28m-8-8 8 8-8 8" fill="none" stroke="#38cfc4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(554 88)">
+      <rect width="214" height="170" rx="16" fill="#19394b" stroke="#2a5a69"/>
+      <circle cx="28" cy="30" r="16" fill="#38cfc4"/><text x="28" y="36" text-anchor="middle" fill="#102a3b" font-size="16" font-weight="800">3</text>
+      <text x="22" y="78" fill="#effffc" font-size="19" font-weight="700">Install skill</text>
+      <text x="22" y="108" fill="#b9d2d6" font-size="15">Register Kinescope</text>
+      <text x="22" y="132" fill="#b9d2d6" font-size="15">in available clients</text>
+    </g>
+    <path d="M777 173h28m-8-8 8 8-8 8" fill="none" stroke="#38cfc4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(811 88)">
+      <rect width="149" height="170" rx="16" fill="#19394b" stroke="#2a5a69"/>
+      <circle cx="28" cy="30" r="16" fill="#38cfc4"/><text x="28" y="36" text-anchor="middle" fill="#102a3b" font-size="16" font-weight="800">4</text>
+      <text x="22" y="78" fill="#effffc" font-size="19" font-weight="700">Sign in</text>
+      <text x="22" y="108" fill="#b9d2d6" font-size="15">when your chosen</text>
+      <text x="22" y="132" fill="#b9d2d6" font-size="15">client asks</text>
+    </g>
+  </g>
+  <text x="48" y="294" fill="#9dbcc4" font-family="system-ui, sans-serif" font-size="14">If neither client is installed, both are added. You sign in yourself. Immutable Linux is left unchanged.</text>
+</svg>
