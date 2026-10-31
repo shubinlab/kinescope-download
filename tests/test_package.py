@@ -234,7 +234,7 @@ class PackageTests(unittest.TestCase):
     def test_readme_documents_single_script_install(self):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(
-            "--max-redirs 0 https://raw.githubusercontent.com/shubinlab/kinescope-download/v1.5.0/install.sh --output \"$installer\" && sh \"$installer\" --with-deps",
+            "curl --fail --silent --show-error --proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 0 https://raw.githubusercontent.com/shubinlab/kinescope-download/v1.5.0/install.sh | sh -s -- --with-deps",
             text,
         )
         self.assertIn("Use `--codex`, `--claude`, or `--all`", text)

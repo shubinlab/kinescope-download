@@ -17,7 +17,7 @@ class SingleInstallerTests(unittest.TestCase):
     def test_readme_uses_one_invocation_of_the_published_script(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("https://raw.githubusercontent.com/shubinlab/kinescope-download/v1.5.0/install.sh", readme)
-        self.assertNotIn("| sh -s --", readme)
+        self.assertIn("| sh -s -- --with-deps", readme)
         self.assertNotIn("shared Python installer", readme)
 
     def test_help_runs_without_python(self):
