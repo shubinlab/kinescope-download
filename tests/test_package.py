@@ -76,6 +76,18 @@ class PackageTests(unittest.TestCase):
             self.assertIn(required, text)
         self.assertIn("./install.sh", text)
 
+    def test_readme_documents_one_command_github_install_and_prerequisites(self):
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "git clone --depth 1 https://github.com/shubinlab/kinescope-download.git kinescope-download && kinescope-download/install.sh --with-deps",
+            text,
+        )
+        self.assertIn("Git, Python 3, and at least one supported client CLI", text)
+        self.assertIn("does not install those prerequisites", text)
+        self.assertIn("executes the checked-out `install.sh`", text)
+        self.assertIn("does not pipe a remote script into a shell", text)
+        self.assertIn("--dry-run", text)
+
     def test_brand_asset_is_valid_svg(self):
         logo = ROOT / "assets" / "logo.svg"
         self.assertTrue(logo.is_file(), "missing logo asset")

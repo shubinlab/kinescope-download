@@ -185,6 +185,47 @@ esac
         self.assertNotIn("sudo ", calls_after_second)
         self.assertNotIn("brew ", calls_after_second)
 
+    def test_shell_installer_with_deps_installs_missing_tools_and_is_idempotent(self):
+        dirname = shutil.which("dirname")
+        if not dirname:
+            self.skipTest("dirname is required by the shell entry point")
+        (self.bin / "dirname").symlink_to(dirname)
+        env = self.env.copy()
+        env["PATH"] = str(self.bin)
+        env["KINESCOPE_PYTHON"] = os.sys.executable
+
+        first = self.run_installer("--with-deps", env=env)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertIn("Media tools installed: yt-dlp, ffmpeg, ffprobe", first.stdout)
+        for tool in ("yt-dlp", "ffmpeg", "ffprobe"):
+            self.assertTrue((self.bin / tool).is_file(), f"missing installed test tool: {tool}")
+
+        second = self.run_installer("--with-deps", env=env)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertIn("Media tools present: yt-dlp, ffmpeg, ffprobe", second.stdout)
+        calls = self.calls()
+        package_command = "omarchy pkg add yt-dlp ffmpeg" if platform.system() == "Linux" else "brew install yt-dlp ffmpeg"
+        self.assertEqual(calls.count(package_command), 1, calls)
+        self.assertEqual(calls.count("codex plugin add kinescope-download@kinescope-download"), 1, calls)
+
+    def test_failed_child_output_is_suppressed_for_stdout_and_stderr(self):
+        from scripts.install import InstallError, run
+
+        sentinel = "fixture-output-sentinel"
+        for stream in ("stdout", "stderr"):
+            with self.subTest(stream=stream):
+                script = self.base / f"emit-{stream}.py"
+                script.write_text(
+                    f"import sys; sys.{stream}.write({sentinel!r}); raise SystemExit(23)\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaises(InstallError) as raised:
+                    run([os.sys.executable, str(script)])
+                message = str(raised.exception)
+                self.assertIn("Command failed (23)", message)
+                self.assertIn(script.name, message)
+                self.assertNotIn(sentinel, message)
+
     def test_one_client_can_be_selected_without_touching_the_other(self):
         result = self.run_installer("--codex")
         self.assertEqual(result.returncode, 0, result.stderr)
