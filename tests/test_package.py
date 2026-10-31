@@ -106,6 +106,16 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(claude_manifest["icon"], "./assets/icon.png")
         self.assertEqual(codex_manifest["extensions"]["com.openai"]["interface"]["composerIcon"], "./assets/icon.png")
 
+    def test_ci_actions_are_sha_pinned_and_dependabot_updates_them(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertRegex(workflow, r"uses: actions/checkout@[0-9a-f]{40} # v7\.0\.1")
+        self.assertRegex(workflow, r"uses: actions/setup-python@[0-9a-f]{40} # v7\.1\.0")
+
+        dependabot = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
+        self.assertIn('package-ecosystem: "github-actions"', dependabot)
+        self.assertIn('directory: "/"', dependabot)
+        self.assertIn('interval: "weekly"', dependabot)
+
 
 if __name__ == "__main__":
     unittest.main()
