@@ -1,8 +1,8 @@
 # Kinescope manifest 403 recovery
 
-Use this only after the share URL is authorized and ordinary `yt-dlp -F` extraction fails with 403. The bundled helper accepts HTTPS Kinescope URLs, checks redirect destinations, caps page reads at 8 MiB, rejects existing output paths before network access, and exclusively creates one manifest file with mode `0600` without printing the signed URL. When sending a supplied referrer, it keeps only the origin and path; it removes the query and fragment.
+Use this only after the share URL is authorized and ordinary `yt-dlp -F` extraction fails with 403. Treat a share URL containing a token or signed query as a credential. Enter it at a hidden prompt in an interactive Bash terminal and pipe it through stdin; do not put the literal URL in a command, environment variable, process argument, log, or shell history. If no controlling terminal is available, stop instead of falling back to argv. The helper rejects positional URLs containing a query or fragment, accepts stdin URLs over HTTPS on Kinescope hosts, checks redirect destinations, caps page reads at 8 MiB, rejects existing output paths before network access, and exclusively creates one manifest file with mode `0600` without printing the signed URL. Network errors are reported without echoing exception text, which can contain the request URL. When sending a supplied referrer, it keeps only the origin and path; it removes the query and fragment.
 
-Set `KINESCOPE_URL` to the supplied Kinescope share/embed URL and `OUTPUT_DIR` to the destination directory. If the stream is embedded elsewhere, set `REFERRER_URL` to that actual embedding page; otherwise leave it empty.
+Set `OUTPUT_DIR` to the destination directory. If the stream is embedded elsewhere, set `REFERRER_URL` to that actual embedding page; otherwise leave it empty.
 
 ```bash
 manifest_dir=$(mktemp -d "${TMPDIR:-/tmp}/kinescope-manifest.XXXXXX")
@@ -16,7 +16,17 @@ fi
 
 # Replace the placeholder with the installed skill directory (the folder containing SKILL.md).
 helper="<installed-skill-directory>/scripts/extract_manifest.py"
-python3 "$helper" "$KINESCOPE_URL" "$manifest_file" "${REFERRER_URL:-}"
+if ! (
+  unset KINESCOPE_URL
+  IFS= read -r -s -p 'Kinescope share/embed URL: ' KINESCOPE_URL < /dev/tty || {
+    printf 'A controlling terminal is required; stopping without exposing the URL.\n' >&2
+    exit 1
+  }
+  printf '\n' >&2
+  printf '%s\n' "$KINESCOPE_URL"
+) | env -u KINESCOPE_URL python3 "$helper" --url-stdin "$manifest_file" "${REFERRER_URL:-}"; then
+  exit 1
+fi
 
 yt-dlp --quiet --no-playlist -F --batch-file "$manifest_file" \
   "${referer_args[@]}"
@@ -35,4 +45,4 @@ yt-dlp --quiet --no-playlist \
   "${referer_args[@]}"
 ```
 
-Run this block in Bash. Do not use `set -x`, verbose output, or paste the manifest URL into the conversation. If page access is denied, multiple manifests are found, the host is unexpected, or the corrected manifest still returns 403, stop and diagnose access/referrer/DRM requirements instead of trying decryption tools.
+Run this block in Bash. Do not use `set -x`, verbose output, or paste either URL into the conversation. The stdin mode keeps the share URL out of argv and command history; network access still necessarily sends it to Kinescope. If page access is denied, multiple manifests are found, the host is unexpected, or the corrected manifest still returns 403, stop and diagnose access/referrer/DRM requirements instead of trying decryption tools.

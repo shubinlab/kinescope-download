@@ -45,7 +45,7 @@ class PackageTests(unittest.TestCase):
         codex_entry = next(item for item in codex_marketplace["plugins"] if item["name"] == "kinescope-download")
         claude_entry = next(item for item in claude_marketplace["plugins"] if item["name"] == "kinescope-download")
 
-        self.assertEqual(codex_plugin["version"], "1.0.5")
+        self.assertEqual(codex_plugin["version"], "1.0.6")
         self.assertEqual(codex_entry["version"], codex_plugin["version"])
         self.assertEqual(claude_plugin["version"], codex_plugin["version"])
         self.assertNotIn("version", claude_entry)
@@ -65,6 +65,21 @@ class PackageTests(unittest.TestCase):
         recovery = (SKILL.parent / "references/403-recovery.md").read_text(encoding="utf-8")
         self.assertIn("folder containing SKILL.md", recovery)
         self.assertIn("scripts/extract_manifest.py", recovery)
+
+    def test_skill_documents_secure_share_url_input_and_original_asset_checks(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        recovery = (SKILL.parent / "references/403-recovery.md").read_text(encoding="utf-8")
+        for phrase in (
+            "unambiguous original",
+            "stream-copy remux",
+            "lossy conversion",
+            "Treat that signed link as a credential",
+        ):
+            self.assertIn(phrase, skill)
+        self.assertIn("--batch-file -", skill)
+        self.assertIn("--url-stdin", recovery)
+        self.assertIn("env -u KINESCOPE_URL", recovery)
+        self.assertIn("command history", recovery)
 
     def test_skill_has_no_host_paths_or_signed_manifest_examples(self):
         self.assertTrue(SKILL.is_file(), "missing packaged Kinescope skill")

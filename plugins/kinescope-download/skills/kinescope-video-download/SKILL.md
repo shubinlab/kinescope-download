@@ -10,8 +10,8 @@ Download only videos the user owns or is authorized to save. Prefer Kinescope's 
 ## Choose the source and downloader
 
 1. Check the installed `yt-dlp`, `ffmpeg`, and `ffprobe` versions. Inspect available formats before choosing a quality. Do not assume a Kinescope-specific extractor exists or hardcode a format ID from another video.
-2. For an account owner, use Kinescope's documented `GET /v1/videos/:video_id` API only when an API token is already available in a local environment variable. Prefer an authorized original asset's `download_link`; if no authorized downloadable asset is returned, use the HLS route. Never ask the user to paste a token, print it, or log signed links.
-3. For a share or embed URL, try `yt-dlp --list-formats URL` first. Kinescope pages can expose a signed HLS manifest through JSON-LD/player metadata even when yt-dlp labels the site as `generic`. Select the highest listed video and audio formats and merge to MP4.
+2. For an account owner, use Kinescope's documented `GET /v1/videos/:video_id` API only when an API token is already available in a local environment variable. Prefer an authorized original asset's `download_link` only when the API identifies one unambiguous original. Treat that signed link as a credential: pass it to a downloader through stdin (for yt-dlp, `--batch-file -`), never through command text, shell history, environment variables, or process arguments. Inspect the downloaded file with `ffprobe`: accept it as MP4 only when the container and streams are supported; if it is not MP4, try a stream-copy remux, then use the HLS route if remuxing fails. Do not silently transcode or choose among ambiguous assets; report the available format and ask before a lossy conversion. Never ask the user to paste a token, print it, or log signed links.
+3. For a share or embed URL, try `yt-dlp --list-formats URL` first when the URL has no credential-bearing query. For a signed or token-bearing share URL, read it through a hidden prompt and pass it to yt-dlp with `--batch-file -` on stdin so it does not appear in command history or process arguments. Kinescope pages can expose a signed HLS manifest through JSON-LD/player metadata even when yt-dlp labels the site as `generic`. Select the highest listed video and audio formats and merge to MP4.
 4. If extraction fails with 403, use the local manifest extraction and secure temporary-file procedure in [references/403-recovery.md](references/403-recovery.md). It handles HTML entities such as `&amp;` and JavaScript escapes such as `\u0026`. Preserve the page's authorized referrer when required. Treat signed manifest URLs as short-lived credentials: keep them out of chat, logs, skill files, shell history, and final output.
 5. Do not add browser cookies by default. If the share requires a signed-in session, use existing browser cookies only when the user has authorized that access; keep cookies local and never print them.
 
@@ -32,7 +32,7 @@ yt-dlp --no-playlist \
   'KINESCOPE_URL'
 ```
 
-Pass `--referer` only when the player requires it; use the actual embedding page URL when known. If it is not embedded, omit the option or use the direct Kinescope page URL only when that is the observed referrer.
+Pass `--referer` only when the player requires it; use the actual embedding page URL when known. If it is not embedded, omit the option or use the direct Kinescope page URL only when that is the observed referrer. For the secure stdin pattern and 403 recovery, read [references/403-recovery.md](references/403-recovery.md); do not put signed or token-bearing URLs in command text, shell history, argv, or logs.
 
 For captured output on fragment-heavy HLS, do not combine `--progress` with `--newline`: yt-dlp writes each progress update as a new line. Use `--no-progress` when only completion and the final path are needed. If ongoing progress is useful, omit `--newline` and use `--progress-delta 5` only when the installed yt-dlp supports it.
 

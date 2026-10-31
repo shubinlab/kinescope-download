@@ -42,6 +42,66 @@ class ExtractManifestTests(unittest.TestCase):
         self.assertEqual(status, 1)
         build_opener.assert_not_called()
 
+    def test_positional_url_with_query_is_rejected_before_any_request(self):
+        signed_url = "https://kinescope.io/video?token=private"
+        stderr = io.StringIO()
+        with patch.object(extract_manifest, "build_opener") as build_opener:
+            with patch("sys.stderr", new=stderr):
+                status = extract_manifest.main([signed_url, "/tmp/manifest"])
+        self.assertEqual(status, 1)
+        self.assertNotIn("token=private", stderr.getvalue())
+        build_opener.assert_not_called()
+
+    def test_signed_page_url_can_be_read_from_stdin_without_argv_or_output_disclosure(self):
+        signed_url = "https://kinescope.io/video?token=private"
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+            def geturl(self):
+                return "https://kinescope.io/video"
+
+            def read(self, _limit):
+                return b'"https://cdn.kinescope.io/master.m3u8"'
+
+        class Opener:
+            def open(self, request, **_kwargs):
+                self.request_url = request.full_url
+                return Response()
+
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "manifest.txt"
+            opener = Opener()
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch.object(extract_manifest, "build_opener", return_value=opener):
+                with patch("sys.stdin", new=io.StringIO(signed_url + "\n")):
+                    with patch("sys.stdout", new=stdout), patch("sys.stderr", new=stderr):
+                        status = extract_manifest.main(["--url-stdin", str(output)])
+            self.assertEqual(status, 0)
+            self.assertEqual(opener.request_url, signed_url)
+            self.assertEqual(output.read_text(encoding="utf-8"), "https://cdn.kinescope.io/master.m3u8\n")
+            self.assertNotIn("token=private", stdout.getvalue() + stderr.getvalue())
+
+    def test_network_error_text_is_not_echoed_when_it_contains_signed_url(self):
+        signed_url = "https://kinescope.io/video?token=private"
+
+        class Opener:
+            def open(self, *_args, **_kwargs):
+                raise OSError(f"403 for {signed_url}")
+
+        stderr = io.StringIO()
+        with patch.object(extract_manifest, "build_opener", return_value=Opener()):
+            with patch("sys.stdin", new=io.StringIO(signed_url + "\n")):
+                with patch("sys.stderr", new=stderr):
+                    status = extract_manifest.main(["--url-stdin", "/tmp/manifest"])
+        self.assertEqual(status, 1)
+        self.assertNotIn("token=private", stderr.getvalue())
+
     def test_sensitive_or_credentialed_referrers_are_rejected_before_any_request(self):
         for referrer in (
             "https://user:pass@example.com/course",
