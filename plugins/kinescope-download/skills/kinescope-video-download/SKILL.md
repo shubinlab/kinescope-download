@@ -15,6 +15,8 @@ Download only videos the user owns or is authorized to save. Prefer Kinescope's 
 4. If extraction fails with 403, use the local manifest extraction and secure temporary-file procedure in [references/403-recovery.md](references/403-recovery.md). It handles HTML entities such as `&amp;` and JavaScript escapes such as `\u0026`. Preserve the page's authorized referrer when required. Treat signed manifest URLs as short-lived credentials: keep them out of chat, logs, skill files, shell history, and final output.
 5. Do not add browser cookies by default. If the share requires a signed-in session, use existing browser cookies only when the user has authorized that access; keep cookies local and never print them.
 
+If the user asks whether a webinar page is live or playing a recording, do not infer that from the page, chat, viewer count, or duration. Use an explicit player status if available. If the media playlist can be inspected locally without exposing its signed URL, `#EXT-X-PLAYLIST-TYPE:VOD` declares a VOD playlist and `#EXT-X-ENDLIST` means no additional segments will be added. These markers describe the playlist, not whether the program was originally prerecorded or broadcast live. If the playlist is unavailable, unsafe to inspect, or lacks clear status, report that the live/recording origin is unknown.
+
 ## Download efficiently
 
 Use yt-dlp's HLS fragment concurrency with a bounded starting value, then adjust only from observed throughput and errors:
@@ -31,6 +33,8 @@ yt-dlp --no-playlist \
 ```
 
 Pass `--referer` only when the player requires it; use the actual embedding page URL when known. If it is not embedded, omit the option or use the direct Kinescope page URL only when that is the observed referrer.
+
+For captured output on fragment-heavy HLS, do not combine `--progress` with `--newline`: yt-dlp writes each progress update as a new line. Use `--no-progress` when only completion and the final path are needed. If ongoing progress is useful, omit `--newline` and use `--progress-delta 5` only when the installed yt-dlp supports it.
 
 If the inspected format table shows separate video/audio IDs that the selector misses, use those IDs for this video only. If the host returns 429s, fragment failures, or slower throughput at 16, retry with fewer concurrent fragments (8, then 4). Keep yt-dlp's resumable partial state; do not delete partial files to restart a transfer.
 
