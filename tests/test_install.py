@@ -469,10 +469,11 @@ esac
     def test_shell_bootstrap_installs_missing_git_and_python_with_omarchy_manager(self):
         bootstrap_bin = self.base / "bootstrap-bin"
         bootstrap_bin.mkdir()
-        for command in ("dirname", "id", "uname", "sed", "head", "tr", "ln"):
+        for command in ("dirname", "id", "sed", "head", "tr", "ln"):
             executable = shutil.which(command)
             self.assertIsNotNone(executable, command)
             (bootstrap_bin / command).symlink_to(executable)
+        write_executable(bootstrap_bin / "uname", "#!/bin/sh\nprintf 'Linux\\n'\n")
         shutil.copy2(self.bin / "codex", bootstrap_bin / "codex")
         write_executable(bootstrap_bin / "omarchy", f'''#!/bin/sh
 set -eu
@@ -484,7 +485,14 @@ ln -s {shutil.which("git")!s} "$KINESCOPE_TEST_BIN/git"
         root = self.base / "bootstrap-checkout"
         root.mkdir()
         (root / "scripts").mkdir()
-        shutil.copy2(ROOT / "install.sh", root / "install.sh")
+        release_dir = tempfile.TemporaryDirectory(prefix="kinescope-release-")
+        self.addCleanup(release_dir.cleanup)
+        release_file = Path(release_dir.name) / "os-release"
+        release_file.write_text('ID=omarchy\nID_LIKE=arch\n', encoding="utf-8")
+        shell_source = (ROOT / "install.sh").read_text(encoding="utf-8")
+        shell_source = shell_source.replace("/etc/os-release", f'"{release_file}"')
+        (root / "install.sh").write_text(shell_source, encoding="utf-8")
+        (root / "install.sh").chmod(0o755)
         shutil.copy2(ROOT / "scripts/install.py", root / "scripts/install.py")
         env = self.env.copy()
         env.update({
@@ -501,15 +509,23 @@ ln -s {shutil.which("git")!s} "$KINESCOPE_TEST_BIN/git"
     def test_shell_bootstrap_dry_run_reports_missing_tools_without_installing(self):
         bootstrap_bin = self.base / "bootstrap-dry-run-bin"
         bootstrap_bin.mkdir()
-        for command in ("dirname", "id", "uname", "sed", "head", "tr"):
+        for command in ("dirname", "id", "sed", "head", "tr"):
             executable = shutil.which(command)
             self.assertIsNotNone(executable, command)
             (bootstrap_bin / command).symlink_to(executable)
+        write_executable(bootstrap_bin / "uname", "#!/bin/sh\nprintf 'Linux\\n'\n")
         write_executable(bootstrap_bin / "omarchy", "#!/bin/sh\nexit 0\n")
         root = self.base / "bootstrap-dry-run-checkout"
         root.mkdir()
         (root / "scripts").mkdir()
-        shutil.copy2(ROOT / "install.sh", root / "install.sh")
+        release_dir = tempfile.TemporaryDirectory(prefix="kinescope-release-")
+        self.addCleanup(release_dir.cleanup)
+        release_file = Path(release_dir.name) / "os-release"
+        release_file.write_text('ID=omarchy\nID_LIKE=arch\n', encoding="utf-8")
+        shell_source = (ROOT / "install.sh").read_text(encoding="utf-8")
+        shell_source = shell_source.replace("/etc/os-release", f'"{release_file}"')
+        (root / "install.sh").write_text(shell_source, encoding="utf-8")
+        (root / "install.sh").chmod(0o755)
         (root / "scripts/install.py").write_text("raise SystemExit('must not run during bootstrap dry-run')\n", encoding="utf-8")
         env = self.env.copy()
         env["PATH"] = str(bootstrap_bin)
