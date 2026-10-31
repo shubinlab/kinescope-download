@@ -42,6 +42,10 @@ class InstallerTests(unittest.TestCase):
         client = r'''#!/bin/sh
 set -eu
 name="__CLIENT__"
+if [ "${1:-}" = "--version" ]; then
+  printf '%s\n' "$name 1.2.3"
+  exit 0
+fi
 printf '%s' "$name" >> "$KINESCOPE_TEST_LOG"
 for arg in "$@"; do printf ' %s' "$arg" >> "$KINESCOPE_TEST_LOG"; done
 printf '\n' >> "$KINESCOPE_TEST_LOG"
@@ -91,11 +95,6 @@ esac
 '''
         for name in ("codex", "claude"):
             write_executable(self.bin / name, client.replace("__CLIENT__", name))
-        for name in ("sudo", "apt-get", "dnf", "pacman", "zypper"):
-            write_executable(
-                self.bin / name,
-                '#!/bin/sh\nprintf "%s\\n" "$0 $*" >> "$KINESCOPE_TEST_LOG"\nexit 99\n',
-            )
         package_manager = (
             '#!/bin/sh\nprintf "%s\\n" "$0 $*" >> "$KINESCOPE_TEST_LOG"\n'
             'for tool in "$@"; do\n'
@@ -105,8 +104,12 @@ esac
             '  esac\n'
             'done\n'
         )
-        write_executable(self.bin / "omarchy", package_manager)
-        write_executable(self.bin / "brew", package_manager)
+        for name in ("apt-get", "dnf", "pacman", "zypper", "omarchy", "brew"):
+            write_executable(self.bin / name, package_manager)
+        write_executable(
+            self.bin / "sudo",
+            '#!/bin/sh\nprintf "sudo %s\\n" "$*" >> "$KINESCOPE_TEST_LOG"\nexec "$@"\n',
+        )
 
     def run_installer(self, *args, cwd=None, env=None, installer_root=ROOT):
         installer = installer_root / "install.sh"
@@ -133,6 +136,151 @@ esac
         bad_result = self.run_installer("--unknown")
         self.assertNotEqual(bad_result.returncode, 0)
         self.assertEqual(self.calls(), "")
+
+    def test_installer_reports_detected_os_package_manager_and_tool_versions(self):
+        result = self.run_installer("--codex", "--dry-run")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Platform:", result.stdout)
+        self.assertIn("package manager:", result.stdout)
+        self.assertIn("codex: 1.2.3", result.stdout)
+        self.assertIn("python3:", result.stdout)
+        self.assertIn("yt-dlp:", result.stdout)
+
+    def test_platform_summary_includes_linux_distribution_release_and_manager(self):
+        from scripts import install
+
+        with patch.object(install.platform, "system", return_value="Linux"):
+            with patch.object(install.platform, "machine", return_value="x86_64"):
+                with patch.object(install.platform, "freedesktop_os_release", return_value={
+                    "NAME": "Omarchy", "VERSION_ID": "4.0.6", "PRETTY_NAME": "Omarchy"
+                }, create=True):
+                    with patch.object(install, "package_manager_command", return_value="omarchy"):
+                        summary = install.platform_summary()
+        self.assertIn("Omarchy 4.0.6", summary)
+        self.assertIn("x86_64", summary)
+        self.assertIn("Omarchy pkg", summary)
+
+    def test_platform_summary_includes_macos_release_and_homebrew(self):
+        from scripts import install
+
+        with patch.object(install.platform, "system", return_value="Darwin"):
+            with patch.object(install.platform, "mac_ver", return_value=("15.1", ("", "", ""), "arm64")):
+                with patch.object(install.platform, "machine", return_value="arm64"):
+                    with patch.object(install, "package_manager_command", return_value="brew"):
+                        summary = install.platform_summary()
+        self.assertIn("macOS 15.1", summary)
+        self.assertIn("arm64", summary)
+        self.assertIn("Homebrew", summary)
+
+    def test_generic_linux_ignores_unrelated_omarchy_command(self):
+        from scripts import install
+
+        def which(name):
+            return f"/usr/bin/{name}" if name in {"omarchy", "apt-get"} else None
+
+        with patch.object(install.shutil, "which", side_effect=which):
+            with patch.object(install, "linux_release_info", return_value={"ID": "ubuntu"}):
+                self.assertEqual(install.package_manager_command("Linux"), "apt-get")
+
+    def test_omarchy_id_uses_native_helper_when_present(self):
+        from scripts import install
+
+        def which(name):
+            return f"/usr/bin/{name}" if name in {"omarchy", "pacman"} else None
+
+        with patch.object(install.shutil, "which", side_effect=which):
+            with patch.object(install, "linux_release_info", return_value={"ID": "omarchy"}):
+                self.assertEqual(install.package_manager_command("Linux"), "omarchy")
+
+    def test_fedora_id_prefers_dnf_over_earlier_apt_get_in_path(self):
+        from scripts import install
+
+        def which(name):
+            return f"/usr/bin/{name}" if name in {"apt-get", "dnf"} else None
+
+        with patch.object(install.shutil, "which", side_effect=which):
+            with patch.object(install, "linux_release_info", return_value={"ID": "fedora", "ID_LIKE": "rhel fedora"}):
+                self.assertEqual(install.package_manager_command("Linux"), "dnf")
+
+    def test_arch_id_prefers_pacman_over_earlier_dnf_in_path(self):
+        from scripts import install
+
+        def which(name):
+            return f"/usr/bin/{name}" if name in {"dnf", "pacman"} else None
+
+        with patch.object(install.shutil, "which", side_effect=which):
+            with patch.object(install, "linux_release_info", return_value={"ID": "arch", "ID_LIKE": "arch"}):
+                self.assertEqual(install.package_manager_command("Linux"), "pacman")
+
+    def test_opensuse_id_uses_zypper_over_earlier_pacman_in_path(self):
+        from scripts import install
+
+        def which(name):
+            return f"/usr/bin/{name}" if name in {"pacman", "zypper"} else None
+
+        with patch.object(install.shutil, "which", side_effect=which):
+            with patch.object(install, "linux_release_info", return_value={"ID": "opensuse-tumbleweed"}):
+                self.assertEqual(install.package_manager_command("Linux"), "zypper")
+
+    def test_immutable_fedora_variants_do_not_use_dnf(self):
+        from scripts import install
+
+        with patch.object(install.shutil, "which", return_value="/usr/bin/dnf"):
+            for variant in ("silverblue", "kinoite", "sericea", "onyx", "coreos", "iot"):
+                with self.subTest(variant=variant):
+                    with patch.object(install, "linux_release_info", return_value={"ID": "fedora", "VARIANT_ID": variant}):
+                        self.assertIsNone(install.package_manager_command("Linux"))
+
+    def test_immutable_opensuse_variants_do_not_use_zypper(self):
+        from scripts import install
+
+        with patch.object(install.shutil, "which", return_value="/usr/bin/zypper"):
+            for distro_id, variant in (
+                ("opensuse-microos", "microos"),
+                ("opensuse", "microos-desktop"),
+                ("opensuse", "aeon"),
+                ("opensuse", "kalpa"),
+            ):
+                with self.subTest(distro_id=distro_id, variant=variant):
+                    with patch.object(install, "linux_release_info", return_value={"ID": distro_id, "VARIANT_ID": variant}):
+                        self.assertIsNone(install.package_manager_command("Linux"))
+
+    def test_immutable_distro_id_is_excluded_without_variant_id(self):
+        from scripts import install
+
+        with patch.object(install.shutil, "which", return_value="/usr/bin/zypper"):
+            with patch.object(install, "linux_release_info", return_value={"ID": "opensuse-microos"}):
+                self.assertIsNone(install.package_manager_command("Linux"))
+
+    def test_immutable_id_like_derivative_is_excluded_by_variant(self):
+        from scripts import install
+
+        with patch.object(install.shutil, "which", return_value="/usr/bin/dnf"):
+            with patch.object(install, "linux_release_info", return_value={
+                "ID": "aurora", "ID_LIKE": "fedora", "VARIANT_ID": "silverblue"
+            }):
+                self.assertIsNone(install.package_manager_command("Linux"))
+
+    def test_unknown_linux_uses_only_one_unambiguous_package_manager(self):
+        from scripts import install
+
+        with patch.object(install, "linux_release_info", return_value={"ID": "customlinux"}):
+            with patch.object(install.shutil, "which", side_effect=lambda name: "/usr/bin/dnf" if name == "dnf" else None):
+                self.assertEqual(install.package_manager_command("Linux"), "dnf")
+            with patch.object(install.shutil, "which", side_effect=lambda name: f"/usr/bin/{name}" if name in {"dnf", "pacman"} else None):
+                self.assertIsNone(install.package_manager_command("Linux"))
+
+    def test_command_version_probe_normalizes_output_and_does_not_echo_extra_text(self):
+        from scripts import install
+
+        completed = subprocess.CompletedProcess(
+            args=["codex", "--version"], returncode=0,
+            stdout="codex-cli 0.166.0-build-secret-https://example.invalid/secret\n", stderr="",
+        )
+        with patch.object(install.shutil, "which", return_value="/fake/codex"):
+            with patch.object(install.subprocess, "run", return_value=completed):
+                version = install.command_version("codex")
+        self.assertEqual(version, "0.166.0")
 
     def test_shell_metacharacters_are_rejected_as_arguments(self):
         marker = self.base / "unexpected-command-ran"
@@ -182,8 +330,9 @@ esac
         self.assertEqual(calls_after_second.count("marketplace add"), 2)
         self.assertEqual(calls_after_second.count("codex plugin add"), 1)
         self.assertEqual(calls_after_second.count("claude plugin install"), 1)
-        self.assertNotIn("sudo ", calls_after_second)
-        self.assertNotIn("brew ", calls_after_second)
+        self.assertNotIn("omarchy pkg add", calls_after_second)
+        self.assertNotIn("apt-get install", calls_after_second)
+        self.assertNotIn("brew install", calls_after_second)
 
     def test_shell_installer_with_deps_installs_missing_tools_and_is_idempotent(self):
         dirname = shutil.which("dirname")
@@ -199,14 +348,18 @@ esac
         self.assertIn("Media tools installed: yt-dlp, ffmpeg, ffprobe", first.stdout)
         for tool in ("yt-dlp", "ffmpeg", "ffprobe"):
             self.assertTrue((self.bin / tool).is_file(), f"missing installed test tool: {tool}")
+        calls_after_first = self.calls()
 
         second = self.run_installer("--with-deps", env=env)
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertIn("Media tools present: yt-dlp, ffmpeg, ffprobe", second.stdout)
-        calls = self.calls()
-        package_command = "omarchy pkg add yt-dlp ffmpeg" if platform.system() == "Linux" else "brew install yt-dlp ffmpeg"
-        self.assertEqual(calls.count(package_command), 1, calls)
-        self.assertEqual(calls.count("codex plugin add kinescope-download@kinescope-download"), 1, calls)
+        from scripts.install import package_manager_command
+        calls_after_second = self.calls()
+        manager = package_manager_command(platform.system())
+        package_command = "omarchy pkg add yt-dlp ffmpeg" if manager == "omarchy" else f"{manager} install"
+        self.assertIn(package_command, calls_after_first)
+        self.assertEqual(calls_after_first.count("yt-dlp ffmpeg"), calls_after_second.count("yt-dlp ffmpeg"))
+        self.assertEqual(calls_after_second.count("codex plugin add kinescope-download@kinescope-download"), 1, calls_after_second)
 
     def test_failed_child_output_is_suppressed_for_stdout_and_stderr(self):
         from scripts.install import InstallError, run
@@ -244,14 +397,21 @@ esac
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.calls(), "")
 
-    def test_dependency_install_is_explicit_and_uses_omarchy_helper(self):
+    def test_dependency_install_is_explicit_and_uses_detected_native_helper(self):
+        from scripts.install import package_manager_command
+
         env = self.env.copy()
         env["PATH"] = str(self.bin)
         result = self.run_python_installer("--codex", "--with-deps", env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
-        expected = "omarchy pkg add" if platform.system() == "Linux" else "brew install"
-        self.assertIn(expected, self.calls())
-        self.assertNotIn("sudo ", self.calls())
+        manager = package_manager_command(platform.system())
+        calls = self.calls()
+        expected = "omarchy pkg add" if manager == "omarchy" else f"{manager} install"
+        self.assertIn(expected, calls)
+        if platform.system() == "Linux" and manager != "omarchy":
+            self.assertIn("sudo ", calls)
+        else:
+            self.assertNotIn("sudo ", calls)
 
     def test_missing_tools_do_not_install_without_opt_in(self):
         env = self.env.copy()
@@ -371,11 +531,12 @@ esac
 
         with patch.object(install.platform, "system", return_value="Linux"):
             with patch.object(install.shutil, "which", side_effect=which):
-                with patch.object(install.os, "geteuid", return_value=1000):
-                    self.assertEqual(
-                        install.media_plan(["yt-dlp", "ffmpeg"]),
-                        [["sudo", "apt-get", "update"], ["sudo", "apt-get", "install", "-y", "yt-dlp", "ffmpeg"]],
-                    )
+                with patch.object(install, "linux_release_info", return_value={"ID": "ubuntu", "ID_LIKE": "debian"}):
+                    with patch.object(install.os, "geteuid", return_value=1000):
+                        self.assertEqual(
+                            install.media_plan(["yt-dlp", "ffmpeg"]),
+                            [["sudo", "apt-get", "update"], ["sudo", "apt-get", "install", "-y", "yt-dlp", "ffmpeg"]],
+                        )
 
     def test_installer_refuses_root_user_scope_changes(self):
         from scripts import install

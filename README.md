@@ -16,41 +16,32 @@ Kinescope Download packages one shared skill for **Codex** and **Claude Code**. 
 
 ## Install
 
-### Omarchy Linux
+### Linux and macOS
 
-This repository installs the Kinescope plugin and, with `--with-deps`, missing media tools. It does not install or sign in to Codex or Claude Code. Install one of those client CLIs separately using the [official Codex setup](https://github.com/openai/codex#installing-and-running-codex-cli) or [Claude Code setup](https://code.claude.com/docs/en/setup). Git and Python 3 must also be on `PATH`; if either is missing on Omarchy, use its package helper:
+Use the same `install.sh` on Omarchy, other supported Linux distributions, and macOS. It detects the operating-system or Linux distribution version, architecture, available package manager, and versions of the client and media tools. It installs the Kinescope plugin; `--with-deps` optionally installs missing `yt-dlp` and FFmpeg. It does not install Codex or Claude Code or sign in to either client; install the client CLI separately using the [official Codex setup](https://github.com/openai/codex#installing-and-running-codex-cli) or [Claude Code setup](https://code.claude.com/docs/en/setup).
 
-```bash
-omarchy pkg add git python
-```
+The GitHub clone command requires Git. The installer itself requires Python 3 and at least one client CLI on `PATH`. If Git or Python 3 is missing, use the machine's native package manager:
 
-On Omarchy, `--with-deps` installs only missing `yt-dlp` and FFmpeg packages through `omarchy pkg add`.
+| System | Git/Python 3 if missing | Media tools with `--with-deps` |
+|---|---|---|
+| Omarchy | `omarchy pkg add git python` | `omarchy pkg add` |
+| Debian/Ubuntu | `sudo apt-get install git python3` | `apt-get` |
+| Fedora Workstation/Server (non-Atomic) | `sudo dnf install git python3` | `dnf` |
+| Arch Linux | `sudo pacman -S git python` | `pacman` |
+| openSUSE | `sudo zypper install git python3` | `zypper` |
+| macOS | `brew install git python` | Homebrew |
 
-### macOS
+For macOS client apps, Homebrew casks are available as `brew install --cask codex` or `brew install --cask claude-code`. If Homebrew is missing, install it using the [official Homebrew instructions](https://brew.sh/). The installer does not bootstrap a package manager, add third-party package sources, or install media packages unless you explicitly pass `--with-deps`.
 
-Install Codex or Claude Code separately. With Homebrew, choose one:
+Automatic dependency installation is limited to the package managers in the table. Known immutable variants—Fedora Silverblue, Kinoite, Sericea, Onyx, CoreOS and IoT, plus openSUSE MicroOS, Aeon and Kalpa—are left untouched; install media tools using the distribution's intended image or layering workflow. Other Linux systems use their `ID`/`ID_LIKE` mapping, or fall back only when exactly one supported package manager is present.
 
-```bash
-brew install --cask codex
-# or
-brew install --cask claude-code
-```
-
-Git and Python 3 must also be on `PATH`; if either is missing, install them with `brew install git python`. On macOS, Homebrew is required for media dependencies only when a media tool is missing and you pass `--with-deps`.
-
-### Other Linux distributions
-
-The same installer supports apt-get (Debian/Ubuntu), dnf, pacman, and zypper when Omarchy is not present. It does not bootstrap a package manager or add third-party package sources. Package installation is opt-in through `--with-deps`.
-
-### Install behavior
-
-On either platform, clone the repository and run the checked-out installer:
+Clone the repository and run the checked-out installer:
 
 ```bash
 git clone --depth 1 https://github.com/shubinlab/kinescope-download.git kinescope-download && kinescope-download/install.sh --with-deps
 ```
 
-It does not pipe a remote script into a shell. Run as your regular user, not with `sudo`. By default it installs into every supported client found on `PATH`; use `--codex` or `--claude` for one client, and `--all` only when both are installed. `--with-deps` explicitly authorizes installation of missing media tools. The installer checks whether `yt-dlp`, `ffmpeg`, and `ffprobe` are discoverable; it does not check versions or run health probes.
+The clone command runs the checked-out `install.sh`; it does not pipe a remote script into a shell. Run as your regular user, not with `sudo`. By default it installs into every supported client found on `PATH`; use `--codex` or `--claude` for one client, and `--all` only when both are installed. Version reporting is informational: the installer does not enforce minimum versions or run health probes.
 
 To preview planned client and package changes, clone the repository and run `kinescope-download/install.sh --with-deps --dry-run`. Installation steps are sequential, not transactional; if a later step fails, earlier setup may remain. The installer checks current state on retry and avoids duplicate client registrations.
 
