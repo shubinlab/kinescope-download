@@ -18,7 +18,7 @@ Kinescope Download packages one shared skill for **Codex** and **Claude Code**. 
 
 ### Linux and macOS
 
-One standalone POSIX shell script handles detection, prerequisite installation, client selection, media dependencies, and plugin setup. It does not hand off to another installer or require Python.
+One standalone POSIX shell script handles detection, prerequisite installation, client setup, media dependencies, and plugin setup. It does not hand off to another installer or require Python.
 
 ```sh
 curl -fsSL https://shubin.co/k | sh
@@ -29,6 +29,9 @@ That short URL serves the same `install.sh` published in release 1.6.1. It check
 By default, the script installs into the client CLI already present. If neither is present, it installs both Codex and Claude Code so the command needs no client-selection prompt. Use `--codex` or `--claude` to choose just one. Official installers do not sign in for you. Run as your regular user, not with `sudo`; package managers request elevation only for system packages.
 
 The script detects and reports the OS or Linux distribution version, architecture, package manager, and whether tools are present. `--dry-run` reports detected tool state without changing the machine. Installation steps are sequential, not transactional; if a later step fails, earlier setup may remain. The script checks current client and marketplace state on retry and avoids duplicate registrations.
+
+<details>
+<summary>Choose one client or install manually</summary>
 
 ### Select one client
 
@@ -43,7 +46,7 @@ Or install both explicitly:
 ./install.sh --all
 ```
 
-The default `./install.sh` installs into whichever supported clients are already on `PATH`, or prompts for a client when neither is present. It installs missing media tools too. The script never runs as root; package managers use `sudo` only when installing required system packages.
+The default `./install.sh` installs into supported clients already on `PATH`; if neither is present, it installs both. Use `--codex` or `--claude` to choose one. The script never runs as root; package managers use `sudo` only when installing required system packages.
 
 ### Install manually
 
@@ -63,14 +66,16 @@ claude plugin install kinescope-download@kinescope-download --scope user
 
 In Claude Code, invoke `/kinescope-download:kinescope-video-download`. Codex can select the packaged skill when a Kinescope download request matches it.
 
+</details>
+
 ## Requirements
 
 - A POSIX shell and `curl` to run the one-file installer.
 - A supported package manager when Git or media tools need installing: Omarchy `omarchy`, Debian/Ubuntu `apt-get`, Fedora/RHEL `dnf`, Arch `pacman`, openSUSE `zypper`, or macOS Homebrew. Linux managers need `sudo` for system package writes, except Omarchy's `omarchy pkg` helper.
-- Codex CLI or Claude Code; the script can install the selected missing CLI.
+- Codex CLI and Claude Code; if neither is installed, the script installs both.
 - `yt-dlp` and FFmpeg (`ffprobe` is included with FFmpeg); the script installs either if missing.
 
-The script installs Git, media tools, and a selected client CLI when missing. Authentication remains a separate user-operated step. `--dry-run` does not install packages or change client configuration.
+The script installs Git, media tools, and client CLIs when missing. Authentication remains a separate user-operated step. `--dry-run` does not install packages or change client configuration.
 
 ## What it does
 
@@ -111,6 +116,9 @@ The logger itself makes no network requests and does not upload history. The sta
 
 Kinescope is a trademark of its owner. Kinescope Download is an independent community project and is not affiliated with or endorsed by Kinescope.
 
+<details>
+<summary>Update or uninstall</summary>
+
 ## Update or uninstall
 
 Update through Codex:
@@ -135,6 +143,8 @@ claude plugin marketplace remove kinescope-download --scope user
 ```
 
 Uninstalling the plugin does not remove `yt-dlp`, FFmpeg, downloaded videos, or unrelated marketplaces.
+
+</details>
 
 ## Development checks
 

@@ -103,6 +103,7 @@ install_packages() {
   packages=$*
   [ -n "$packages" ] || return 0
   [ "$dry_run" -eq 0 ] || { printf 'Would install packages: %s\n' "$packages"; return 0; }
+  printf 'Installing system packages: %s\n' "$packages"
   case "$manager" in
     omarchy) omarchy pkg add $packages ;;
     apt-get) sudo apt-get update && sudo apt-get install -y $packages ;;
@@ -129,11 +130,10 @@ printf 'Platform: %s %s (%s); package manager: %s\n' "$os_name" "$os_version" "$
 if ! have_git; then
   [ "$immutable" -eq 0 ] || fail "$os_name is immutable; install Git using its documented layering or toolbox workflow."
   [ -n "$manager" ] || fail 'Git is missing. Install Homebrew or Git, then rerun this script.'
-  if [ "$manager" = pacman ] || [ "$manager" = omarchy ]; then git_package=git; else git_package=git; fi
   if [ "$manager" != brew ] && [ "$manager" != omarchy ] && ! have_tool sudo; then
     fail 'sudo is required to install Git.'
   fi
-  install_packages "$git_package"
+  install_packages git
 fi
 
 clients=
