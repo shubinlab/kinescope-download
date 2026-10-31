@@ -7,6 +7,8 @@ import argparse
 import json
 import os
 import platform
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -17,6 +19,43 @@ PLUGIN = "kinescope-download"
 MARKETPLACE = "kinescope-download"
 MARKETPLACE_SOURCE = "shubinlab/kinescope-download"
 MEDIA_TOOLS = ("yt-dlp", "ffmpeg", "ffprobe")
+VERSION_COMMANDS = {
+    "git": ("--version",),
+    "codex": ("--version",),
+    "claude": ("--version",),
+    "yt-dlp": ("--version",),
+    "ffmpeg": ("-version",),
+    "ffprobe": ("-version",),
+}
+LINUX_PACKAGE_MANAGERS = {
+    "debian": "apt-get",
+    "ubuntu": "apt-get",
+    "linuxmint": "apt-get",
+    "pop": "apt-get",
+    "elementary": "apt-get",
+    "fedora": "dnf",
+    "rhel": "dnf",
+    "centos": "dnf",
+    "rocky": "dnf",
+    "almalinux": "dnf",
+    "ol": "dnf",
+    "arch": "pacman",
+    "manjaro": "pacman",
+    "endeavouros": "pacman",
+    "garuda": "pacman",
+    "artix": "pacman",
+    "opensuse": "zypper",
+    "opensuse-leap": "zypper",
+    "opensuse-tumbleweed": "zypper",
+    "suse": "zypper",
+    "sles": "zypper",
+    "sled": "zypper",
+}
+IMMUTABLE_LINUX_IDS = {"opensuse-microos", "opensuse-aeon", "opensuse-kalpa"}
+IMMUTABLE_LINUX_VARIANTS = {
+    "silverblue", "kinoite", "sericea", "onyx", "coreos", "iot",
+    "microos", "microos-desktop", "aeon", "kalpa",
+}
 
 
 class InstallError(RuntimeError):
@@ -140,6 +179,110 @@ def client_command(client: str, *args: str) -> list[str]:
     return [client, *args]
 
 
+def package_manager_command(system: str | None = None) -> str | None:
+    system = system or platform.system()
+    if system == "Darwin":
+        return "brew" if shutil.which("brew") else None
+    if system != "Linux":
+        return None
+    release = linux_release_info()
+    distro_id = release.get("ID", "").lower()
+    if distro_id == "omarchy":
+        return "omarchy" if shutil.which("omarchy") else None
+    variant = release.get("VARIANT_ID", "").lower()
+    if distro_id in IMMUTABLE_LINUX_IDS or variant in IMMUTABLE_LINUX_VARIANTS:
+        return None
+
+    manager = LINUX_PACKAGE_MANAGERS.get(distro_id)
+    if not manager:
+        for family in release.get("ID_LIKE", "").lower().split():
+            manager = LINUX_PACKAGE_MANAGERS.get(family)
+            if manager:
+                break
+    if manager:
+        return manager if shutil.which(manager) else None
+
+    available = [name for name in ("apt-get", "dnf", "pacman", "zypper") if shutil.which(name)]
+    return available[0] if len(available) == 1 else None
+
+
+def linux_release_info() -> dict[str, str]:
+    reader = getattr(platform, "freedesktop_os_release", None)
+    if reader:
+        try:
+            return reader()
+        except (OSError, ValueError):
+            pass
+    try:
+        lines = Path("/etc/os-release").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+    values = {}
+    for line in lines:
+        key, separator, value = line.partition("=")
+        if not separator or not key:
+            continue
+        try:
+            parsed = shlex.split(value, comments=False, posix=True)
+        except ValueError:
+            continue
+        values[key] = parsed[0] if parsed else ""
+    return values
+
+
+def platform_summary() -> str:
+    system = platform.system()
+    machine = platform.machine() or "unknown architecture"
+    if system == "Darwin":
+        version = platform.mac_ver()[0]
+        name = f"macOS {version}" if version else "macOS (version unavailable)"
+    elif system == "Linux":
+        release = linux_release_info()
+        name = release.get("PRETTY_NAME") or release.get("NAME") or "Linux"
+        version = release.get("VERSION_ID", "")
+        if version and version not in name:
+            name = f"{name} {version}"
+    else:
+        name = system or "Unknown OS"
+    name = " ".join("".join(char if char.isprintable() else " " for char in name).split())[:100]
+    manager = package_manager_command(system)
+    manager_label = {
+        "omarchy": "Omarchy pkg",
+        "brew": "Homebrew",
+    }.get(manager, manager or "not detected")
+    return f"{name} ({machine}); package manager: {manager_label}"
+
+
+def command_version(name: str) -> str:
+    if name == "python3":
+        return platform.python_version()
+    executable = shutil.which(name)
+    if not executable:
+        return "missing"
+    try:
+        result = subprocess.run(
+            [executable, *VERSION_COMMANDS.get(name, ("--version",))],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "present (version unavailable)"
+    output = result.stdout or result.stderr
+    if result.returncode or not output.strip():
+        return "present (version unavailable)"
+    version = re.search(r"(?<![A-Za-z0-9])n?\d+(?:\.\d+){1,3}", output.splitlines()[0])
+    return version.group(0) if version else "present (version unavailable)"
+
+
+def print_environment_summary() -> None:
+    print(f"Platform: {platform_summary()}")
+    print("Detected versions:")
+    for name in ("git", "python3", "codex", "claude", *MEDIA_TOOLS):
+        print(f"  {name}: {command_version(name)}")
+
+
 def plugin_install_command(client: str) -> list[str]:
     if client == "codex":
         return client_command(client, "plugin", "add", f"{PLUGIN}@{MARKETPLACE}")
@@ -210,18 +353,19 @@ def install_client(client: str, dry_run: bool, state: dict[str, bool]) -> None:
 def media_plan(packages: list[str]) -> list[list[str]]:
     system = platform.system()
     if system == "Darwin":
-        if not shutil.which("brew"):
+        manager = package_manager_command(system)
+        if not manager:
             raise InstallError("Homebrew is required to install missing macOS media tools. Install Homebrew, then retry.")
-        return [["brew", "install", *packages]]
+        return [[manager, "install", *packages]]
     if system != "Linux":
         raise InstallError(f"Automatic media dependency installation is unsupported on {system or 'this OS'}.")
 
-    if shutil.which("omarchy"):
+    manager = package_manager_command(system)
+    if manager == "omarchy":
         return [["omarchy", "pkg", "add", *packages]]
 
-    manager = next((name for name in ("apt-get", "dnf", "pacman", "zypper") if shutil.which(name)), None)
     if not manager:
-        raise InstallError("No supported Linux package manager found. Install yt-dlp and FFmpeg manually.")
+        raise InstallError("No unambiguous supported package manager found for this Linux distribution. Install yt-dlp and FFmpeg manually.")
 
     package_names = list(packages)
     if manager == "apt-get":
@@ -268,6 +412,8 @@ def install_media_tools(with_deps: bool, dry_run: bool) -> None:
     if still_missing:
         raise InstallError("Media tools still missing after package install: " + ", ".join(still_missing))
     print("Media tools installed: yt-dlp, ffmpeg, ffprobe")
+    for tool in MEDIA_TOOLS:
+        print(f"  {tool}: {command_version(tool)}")
 
 
 def selected_clients(args: argparse.Namespace) -> list[str]:
@@ -294,6 +440,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if not args.dry_run and hasattr(os, "geteuid") and os.geteuid() == 0:
             raise InstallError("Run install.sh as your normal user, not with sudo; package managers elevate only when needed.")
+        print_environment_summary()
         clients = selected_clients(args)
         # Read all current client state and dependency-manager support before changing either client's settings.
         states = {client: inspect_client(client) for client in clients}
