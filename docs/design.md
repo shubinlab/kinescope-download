@@ -9,7 +9,7 @@ Ship one public Git repository that installs the authorized Kinescope download w
 - The repository root is a marketplace for Codex and Claude Code.
 - `plugins/kinescope-download/` is the installable plugin package. It contains one shared skill, its focused references, a portable Codex `plugin.json`, and Claude Code's `.claude-plugin/plugin.json`.
 - `.agents/plugins/marketplace.json` and `.claude-plugin/marketplace.json` expose that same plugin to their respective clients.
-- `install.sh` is the POSIX-shell bootstrap and package entry point. It can fetch the versioned source archive without Git, add missing Git/Python through an identified native manager, and then run the Python installer. If no client is present, the user chooses which official client installer to run; authentication stays user-controlled. The Python installer preflights selected client state before changing either profile. Media tools remain explicit through `--with-deps`.
+- `install.sh` is the complete POSIX-shell installer and the only user-facing runtime entry point. It detects the platform, installs missing Git/client/media tools through the selected native or official installer, and configures Codex/Claude plugin marketplaces without a Python handoff. Authentication stays user-controlled; media packages remain opt-in through `--with-deps`.
 - `README.md` is the human entrypoint; CLI installers and documented manual commands must produce the same user-scope installation.
 
 ## Runtime and safety boundaries
@@ -19,7 +19,7 @@ Ship one public Git repository that installs the authorized Kinescope download w
 - Downloads remain limited to media the user owns or is authorized to save. DRM/key circumvention and logging signed URLs or account credentials are out of scope.
 - The 403 helper fetches only HTTPS pages on allowlisted Kinescope domains, validates redirects and manifest hosts, and caps page reads at 8 MiB.
 - VPN changes stay domain-scoped, preserve ChatGPT's route, and require interface-aware evidence before claiming direct egress.
-- The shell installer supports Bash 3.2+ on macOS and common Linux package managers. Unknown systems fail with manual instructions instead of guessing.
+- The shell installer supports POSIX sh on macOS and common Linux package managers. Unknown systems and known immutable variants fail with manual instructions instead of guessing.
 
 ## Red-team review focus
 
