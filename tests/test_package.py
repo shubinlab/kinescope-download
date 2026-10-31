@@ -231,9 +231,16 @@ class PackageTests(unittest.TestCase):
             "git clone --depth 1 https://github.com/shubinlab/kinescope-download.git kinescope-download && kinescope-download/install.sh --with-deps",
             text,
         )
-        self.assertIn("Git, Python 3, and at least one supported client CLI", text)
-        self.assertIn("does not install those prerequisites", text)
-        self.assertIn("executes the checked-out `install.sh`", text)
+        self.assertIn("use `--codex` or `--claude` for one client", text)
+        self.assertIn("omarchy pkg add git python", text)
+        self.assertIn("brew install git python", text)
+        self.assertIn("brew install --cask codex", text)
+        self.assertIn("brew install --cask claude-code", text)
+        self.assertIn("https://code.claude.com/docs/en/setup", text)
+        self.assertIn("Homebrew is required for media dependencies only when a media tool is missing", text)
+        self.assertIn("apt-get (Debian/Ubuntu)", text)
+        self.assertIn("does not install or sign in to Codex or Claude Code", text)
+        self.assertIn("run the checked-out installer", text)
         self.assertIn("does not pipe a remote script into a shell", text)
         self.assertIn("--dry-run", text)
 
