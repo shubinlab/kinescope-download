@@ -24,7 +24,7 @@ Ship one public Git repository that installs the authorized Kinescope download w
 ## Red-team review focus
 
 - Repeated installation must not duplicate marketplaces or report success after a failed client command.
-- When no client is present, interactive runs ask which one to install and noninteractive runs require `--codex`, `--claude`, or `--all`; installing a CLI must never authenticate the user.
+- When no client is present, install both by default; `--codex` or `--claude` selects one. Installing a CLI must never authenticate the user.
 - Paths with spaces, hostile shell arguments, malformed JSON, and valid-but-wrong client JSON shapes must not cause word splitting, arbitrary command execution, or partial setup.
 - The 403 helper must reject local/private/lookalike destinations before fetching, validate redirects, limit response size, and keep signed manifest URLs out of output.
 - Missing media dependencies install automatically through a positively identified supported package manager; immutable Linux systems fail closed before package changes.

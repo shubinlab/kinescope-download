@@ -145,14 +145,7 @@ case "$selection" in
     for candidate in codex claude; do
       have_tool "$candidate" && clients="$clients $candidate"
     done
-    if [ -z "$clients" ]; then
-      [ -t 0 ] || fail 'no client CLI found; rerun with --codex, --claude, or --all.'
-      printf '%s\n' 'No client CLI found. Install which one? 1) Codex  2) Claude Code  3) Both'
-      printf 'Choose 1, 2, or 3 [1]: '
-      IFS= read -r choice || fail 'no client selected.'
-      choice=${choice:-1}
-      case "$choice" in 1) clients=codex ;; 2) clients=claude ;; 3) clients='codex claude' ;; *) fail 'choose 1, 2, or 3.' ;; esac
-    fi
+    [ -n "$clients" ] || clients='codex claude'
     ;;
 esac
 
