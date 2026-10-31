@@ -23,6 +23,7 @@ class InstallerTests(unittest.TestCase):
         self.bin.mkdir()
         self.state = self.root / "state"
         self.log = self.root / "commands.log"
+        executable(self.bin / "brew", "#!/bin/sh\nexit 0\n")
         self.env = os.environ.copy()
         self.env.update({
             "PATH": f"{self.bin}{os.pathsep}/usr/bin:/bin",
