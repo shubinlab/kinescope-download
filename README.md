@@ -21,12 +21,12 @@ Kinescope Download packages one shared skill for **Codex** and **Claude Code**. 
 One standalone POSIX shell script handles detection, prerequisite installation, client selection, media dependencies, and plugin setup. It does not hand off to another installer or require Python.
 
 ```sh
-curl -fsSL https://shubin.co/k | sh -s -- --with-deps
+curl -fsSL https://shubin.co/k | sh
 ```
 
-That short URL serves the same `install.sh` published in release 1.5.0. The example installs missing media tools too; omit `--with-deps` if you only want the plugin. That flag may install system packages and request your normal `sudo` authentication. The script needs `curl` and a POSIX shell. It installs Git when missing because the client CLIs use Git for marketplace plugins. On macOS, Homebrew must already be installed if Git or media tools need installing; the script does not install or modify Homebrew. On Linux, it detects the distribution and package manager from `/etc/os-release`. It stops on Fedora Atomic variants, openSUSE MicroOS/Aeon/Kalpa, NixOS, SteamOS, and known Bazzite/Universal Blue IDs rather than changing an immutable base image.
+That short URL serves the same `install.sh` published in release 1.6.0. It checks and installs missing Git, Codex/Claude CLI, yt-dlp, and FFmpeg through the detected package manager or official client installer; package installation may request your normal `sudo` authentication. The script needs `curl` and a POSIX shell. On macOS, Homebrew must already be installed if Git or media tools need installing; the script does not install or modify Homebrew. On Linux, it detects the distribution and package manager from `/etc/os-release`. It stops on Fedora Atomic variants, openSUSE MicroOS/Aeon/Kalpa, NixOS, SteamOS, and known Bazzite/Universal Blue IDs rather than changing an immutable base image.
 
-If neither Codex nor Claude Code is installed, an interactive run asks which client CLI to install. Use `--codex`, `--claude`, or `--all` to select one or both without a prompt. The selected missing CLI is installed with its official user-level installer; the script never signs in for you. See the [Codex CLI instructions](https://github.com/openai/codex#installing-and-running-codex-cli) and [Claude Code setup](https://code.claude.com/docs/en/setup). If one or more clients are already present, it installs the plugin into those clients by default. `--with-deps` installs missing `yt-dlp` and FFmpeg. Run as your regular user, not with `sudo`; package managers request elevation only for system packages.
+If neither Codex nor Claude Code is installed, an interactive run asks which client CLI to install. Use `--codex`, `--claude`, or `--all` to select one or both without a prompt. The selected missing CLI is installed with its official user-level installer; the script never signs in for you. If one or more clients are already present, it installs the plugin into those clients by default. Run as your regular user, not with `sudo`; package managers request elevation only for system packages.
 
 The script detects and reports the OS or Linux distribution version, architecture, package manager, and whether tools are present. `--dry-run` reports detected tool state without changing the machine. Installation steps are sequential, not transactional; if a later step fails, earlier setup may remain. The script checks current client and marketplace state on retry and avoids duplicate registrations.
 
@@ -43,7 +43,7 @@ Or install both explicitly:
 ./install.sh --all
 ```
 
-The default `./install.sh` installs into whichever supported clients are already on `PATH`, or prompts for a client when neither is present. `--with-deps` also installs missing media tools. The script never runs as root; package managers use `sudo` only when installing required system packages.
+The default `./install.sh` installs into whichever supported clients are already on `PATH`, or prompts for a client when neither is present. It installs missing media tools too. The script never runs as root; package managers use `sudo` only when installing required system packages.
 
 ### Install manually
 
@@ -68,9 +68,9 @@ In Claude Code, invoke `/kinescope-download:kinescope-video-download`. Codex can
 - A POSIX shell and `curl` to run the one-file installer.
 - A supported package manager when Git or media tools need installing: Omarchy `omarchy`, Debian/Ubuntu `apt-get`, Fedora/RHEL `dnf`, Arch `pacman`, openSUSE `zypper`, or macOS Homebrew. Linux managers need `sudo` for system package writes, except Omarchy's `omarchy pkg` helper.
 - Codex CLI or Claude Code; the script can install the selected missing CLI.
-- `yt-dlp` and FFmpeg (`ffprobe` is included with FFmpeg) to download and verify media.
+- `yt-dlp` and FFmpeg (`ffprobe` is included with FFmpeg); the script installs either if missing.
 
-The script installs Git when missing and can install Codex CLI or Claude Code when selected. Authentication remains a separate user-operated step. The plugin can be installed without media tools. If they are missing, it reports that; `--with-deps` installs them using a supported package manager. `--dry-run` does not install packages or change client configuration.
+The script installs Git, media tools, and a selected client CLI when missing. Authentication remains a separate user-operated step. `--dry-run` does not install packages or change client configuration.
 
 ## What it does
 

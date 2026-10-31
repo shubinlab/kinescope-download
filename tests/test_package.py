@@ -51,7 +51,7 @@ class PackageTests(unittest.TestCase):
         codex_entry = next(item for item in codex_marketplace["plugins"] if item["name"] == "kinescope-download")
         claude_entry = next(item for item in claude_marketplace["plugins"] if item["name"] == "kinescope-download")
 
-        self.assertEqual(codex_plugin["version"], "1.5.0")
+        self.assertEqual(codex_plugin["version"], "1.6.0")
         self.assertEqual(codex_entry["version"], codex_plugin["version"])
         self.assertEqual(claude_plugin["version"], codex_plugin["version"])
         self.assertNotIn("version", claude_entry)
@@ -223,27 +223,26 @@ class PackageTests(unittest.TestCase):
         self.assertIn("codex plugin add", shell)
         self.assertIn("claude plugin install", shell)
 
-    def test_readme_documents_supported_clients_and_optional_dependencies(self):
+    def test_readme_documents_supported_clients_and_automatic_dependencies(self):
         readme = ROOT / "README.md"
         self.assertTrue(readme.is_file(), "missing user-facing README")
         text = readme.read_text(encoding="utf-8")
-        for required in ("Linux", "macOS", "Codex", "Claude Code", "--with-deps", "DRM"):
+        for required in ("Linux", "macOS", "Codex", "Claude Code", "DRM"):
             self.assertIn(required, text)
+        self.assertIn("checks and installs missing Git, Codex/Claude CLI, yt-dlp, and FFmpeg", text)
         self.assertIn("./install.sh", text)
 
     def test_readme_documents_single_script_install(self):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(
-            "curl -fsSL https://shubin.co/k | sh -s -- --with-deps",
+            "curl -fsSL https://shubin.co/k | sh",
             text,
         )
-        self.assertIn("same `install.sh` published in release 1.5.0", text)
+        self.assertIn("same `install.sh` published in release 1.6.0", text)
         self.assertIn("Use `--codex`, `--claude`, or `--all`", text)
         self.assertIn("It does not hand off to another installer or require Python", text)
-        self.assertIn("It installs Git when missing", text)
+        self.assertIn("It checks and installs missing Git, Codex/Claude CLI, yt-dlp, and FFmpeg", text)
         self.assertIn("the script never signs in for you", text)
-        self.assertIn("https://code.claude.com/docs/en/setup", text)
-        self.assertIn("https://github.com/openai/codex#installing-and-running-codex-cli", text)
         self.assertIn("The script detects and reports the OS or Linux distribution version, architecture", text)
         self.assertIn("It stops on Fedora Atomic variants", text)
         self.assertIn("NixOS, SteamOS, and known Bazzite/Universal Blue IDs", text)
