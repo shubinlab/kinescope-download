@@ -24,7 +24,20 @@ class InstallerTests(unittest.TestCase):
         self.bin.mkdir()
         self.state = self.root / "state"
         self.log = self.root / "commands.log"
-        executable(self.bin / "brew", "#!/bin/sh\nexit 0\n")
+        package_manager = (
+            "#!/bin/sh\nset -eu\n"
+            "printf 'packages: %s\\n' \"$*\" >> \"$KINESCOPE_TEST_LOG\"\n"
+            "for package in \"$@\"; do\n"
+            "  case \"$package\" in\n"
+            "    git) printf '#!/bin/sh\\nprintf \\\"git version 2.0\\\\n\\\"\\n' > \"$KINESCOPE_TEST_BIN/git\"; chmod +x \"$KINESCOPE_TEST_BIN/git\" ;;\n"
+            "    yt-dlp) printf '#!/bin/sh\\nexit 0\\n' > \"$KINESCOPE_TEST_BIN/yt-dlp\"; chmod +x \"$KINESCOPE_TEST_BIN/yt-dlp\" ;;\n"
+            "    ffmpeg) printf '#!/bin/sh\\nexit 0\\n' > \"$KINESCOPE_TEST_BIN/ffmpeg\"; cp \"$KINESCOPE_TEST_BIN/ffmpeg\" \"$KINESCOPE_TEST_BIN/ffprobe\"; chmod +x \"$KINESCOPE_TEST_BIN/ffprobe\" ;;\n"
+            "  esac\n"
+            "done\n"
+        )
+        for manager in ("brew", "apt-get", "dnf", "pacman", "zypper", "omarchy"):
+            executable(self.bin / manager, package_manager)
+        executable(self.bin / "sudo", "#!/bin/sh\nexec \"$@\"\n")
         self.env = os.environ.copy()
         self.env.update({
             "PATH": f"{self.bin}{os.pathsep}/usr/bin:/bin",
