@@ -9,7 +9,7 @@ Ship one public Git repository that installs the authorized Kinescope download w
 - The repository root is a marketplace for Codex and Claude Code.
 - `plugins/kinescope-download/` is the installable plugin package. It contains one shared skill, its focused references, a portable Codex `plugin.json`, and Claude Code's `.claude-plugin/plugin.json`.
 - `.agents/plugins/marketplace.json` and `.claude-plugin/marketplace.json` expose that same plugin to their respective clients.
-- `install.sh` is the complete POSIX-shell installer and the only user-facing runtime entry point. It detects the platform, installs missing Git/client/media tools through the selected native or official installer, and configures Codex/Claude plugin marketplaces without a Python handoff. Authentication stays user-controlled; media packages remain opt-in through `--with-deps`.
+- `install.sh` is the complete POSIX-shell installer and the only user-facing runtime entry point. It detects the platform, installs missing Git/client/media tools through the selected native or official installer, and configures Codex/Claude plugin marketplaces without a Python handoff. Authentication stays user-controlled.
 - `README.md` is the human entrypoint; CLI installers and documented manual commands must produce the same user-scope installation.
 
 ## Runtime and safety boundaries
@@ -27,5 +27,5 @@ Ship one public Git repository that installs the authorized Kinescope download w
 - When no client is present, interactive runs ask which one to install and noninteractive runs require `--codex`, `--claude`, or `--all`; installing a CLI must never authenticate the user.
 - Paths with spaces, hostile shell arguments, malformed JSON, and valid-but-wrong client JSON shapes must not cause word splitting, arbitrary command execution, or partial setup.
 - The 403 helper must reject local/private/lookalike destinations before fetching, validate redirects, limit response size, and keep signed manifest URLs out of output.
-- Media dependencies must never be installed unless `--with-deps` was explicitly supplied; bootstrap tools use only a positively identified supported package manager, with immutable or ambiguous Linux systems failing closed.
+- Missing media dependencies install automatically through a positively identified supported package manager; immutable Linux systems fail closed before package changes.
 - Marketplace paths must stay inside the package. Official Codex and Claude installer scripts may be downloaded only over HTTPS to a temporary file and executed only after HTTPS redirect, response-size, and shebang checks; never execute them through a remote shell pipe.

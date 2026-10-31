@@ -1,5 +1,6 @@
 import os
 import shlex
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -23,7 +24,20 @@ class InstallerTests(unittest.TestCase):
         self.bin.mkdir()
         self.state = self.root / "state"
         self.log = self.root / "commands.log"
-        executable(self.bin / "brew", "#!/bin/sh\nexit 0\n")
+        package_manager = (
+            "#!/bin/sh\nset -eu\n"
+            "printf 'packages: %s\\n' \"$*\" >> \"$KINESCOPE_TEST_LOG\"\n"
+            "for package in \"$@\"; do\n"
+            "  case \"$package\" in\n"
+            "    git) printf '#!/bin/sh\\nprintf \\\"git version 2.0\\\\n\\\"\\n' > \"$KINESCOPE_TEST_BIN/git\"; chmod +x \"$KINESCOPE_TEST_BIN/git\" ;;\n"
+            "    yt-dlp) printf '#!/bin/sh\\nexit 0\\n' > \"$KINESCOPE_TEST_BIN/yt-dlp\"; chmod +x \"$KINESCOPE_TEST_BIN/yt-dlp\" ;;\n"
+            "    ffmpeg) printf '#!/bin/sh\\nexit 0\\n' > \"$KINESCOPE_TEST_BIN/ffmpeg\"; chmod +x \"$KINESCOPE_TEST_BIN/ffmpeg\"; cp \"$KINESCOPE_TEST_BIN/ffmpeg\" \"$KINESCOPE_TEST_BIN/ffprobe\" ;;\n"
+            "  esac\n"
+            "done\n"
+        )
+        for manager in ("brew", "apt-get", "dnf", "pacman", "zypper", "omarchy"):
+            executable(self.bin / manager, package_manager)
+        executable(self.bin / "sudo", "#!/bin/sh\nexec \"$@\"\n")
         self.env = os.environ.copy()
         self.env.update({
             "PATH": f"{self.bin}{os.pathsep}/usr/bin:/bin",
@@ -142,6 +156,39 @@ esac
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Dry run: no changes made", result.stdout)
         self.assertEqual(self.calls(), "")
+
+    def test_missing_media_tools_are_installed_by_default_on_detected_omarchy(self):
+        script_dir = self.root / "omarchy-checkout"
+        script_dir.mkdir()
+        release = self.root / "omarchy-os-release"
+        release.write_text('ID=omarchy\nID_LIKE=arch\nPRETTY_NAME="Omarchy Test"\n', encoding="utf-8")
+        source = (ROOT / "install.sh").read_text(encoding="utf-8").replace("/etc/os-release", f'"{release}"')
+        executable(script_dir / "install.sh", source)
+        executable(self.bin / "uname", "#!/bin/sh\nprintf 'Linux\\n'\n")
+        executable(self.bin / "omarchy", "#!/bin/sh\n"
+            "set -eu\n"
+            "printf '%s\\n' \"$*\" >> \"$KINESCOPE_TEST_LOG\"\n"
+            "for tool in \"$@\"; do\n"
+            "  case \"$tool\" in\n"
+            "    yt-dlp|ffmpeg) printf '#!/bin/sh\\nexit 0\\n' > \"$KINESCOPE_TEST_BIN/$tool\"; chmod +x \"$KINESCOPE_TEST_BIN/$tool\" ;;\n"
+            "  esac\n"
+            "done\n"
+            "if [ -f \"$KINESCOPE_TEST_BIN/ffmpeg\" ]; then cp \"$KINESCOPE_TEST_BIN/ffmpeg\" \"$KINESCOPE_TEST_BIN/ffprobe\"; fi\n")
+        for tool in ("dirname", "id", "uname", "sed", "head", "tr", "grep", "wc", "cp", "chmod", "git"):
+            path = shutil.which(tool)
+            if path and not (self.bin / tool).exists():
+                (self.bin / tool).symlink_to(path)
+        env = self.env.copy()
+        env["PATH"] = str(self.bin)
+        result = subprocess.run(
+            [str(script_dir / "install.sh"), "--codex"],
+            cwd=script_dir, env=env, text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Omarchy Test", result.stdout)
+        self.assertIn("pkg add yt-dlp ffmpeg", self.calls())
+        for tool in ("yt-dlp", "ffmpeg", "ffprobe"):
+            self.assertTrue((self.bin / tool).is_file(), tool)
 
     def test_missing_codex_uses_official_installer_before_plugin_install(self):
         codex_fixture = self.root / "codex-fixture"

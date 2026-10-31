@@ -15,14 +15,13 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    'Usage: install.sh [--codex|--claude|--all] [--with-deps] [--dry-run]' \
+    'Usage: install.sh [--codex|--claude|--all] [--dry-run]' \
     '' \
     'Checks and installs missing prerequisites, a selected Codex/Claude CLI, and' \
     'the Kinescope plugin. Sign-in stays with you. Run as your normal user.'
 }
 
 selection=
-with_deps=0
 dry_run=0
 for argument in "$@"; do
   case "$argument" in
@@ -31,7 +30,7 @@ for argument in "$@"; do
       [ -z "$selection" ] || fail 'choose only one of --codex, --claude, or --all.'
       selection=$argument
       ;;
-    --with-deps) with_deps=1 ;;
+    --with-deps) : ;; # kept as a compatibility flag; missing tools install by default
     --dry-run) dry_run=1 ;;
     *) fail "unknown option: $argument" ;;
   esac
@@ -235,14 +234,12 @@ for tool in $MEDIA_TOOLS; do
   have_tool "$tool" || missing_tools="$missing_tools $tool"
 done
 media_packages=
-if [ -n "$missing_tools" ] && [ "$with_deps" -eq 1 ]; then
+if [ -n "$missing_tools" ]; then
   [ "$immutable" -eq 0 ] || fail "$os_name is immutable; install media tools using its documented layering or toolbox workflow."
-  [ -n "$manager" ] || fail 'install Homebrew before using --with-deps on macOS.'
+  [ -n "$manager" ] || fail 'no supported package manager is available to install missing media tools.'
   if [ "$manager" != brew ] && [ "$manager" != omarchy ] && ! have_tool sudo; then fail 'sudo is required to install media tools.'; fi
   case "$missing_tools" in *yt-dlp*) media_packages="$media_packages yt-dlp" ;; esac
   case "$missing_tools" in *ffmpeg*|*ffprobe*) media_packages="$media_packages ffmpeg" ;; esac
-elif [ -n "$missing_tools" ]; then
-  printf 'Missing media tools:%s (rerun with --with-deps to install).\n' "$missing_tools"
 fi
 
 if [ "$dry_run" -eq 1 ]; then
@@ -264,7 +261,12 @@ for client in $clients; do
   case "$client" in codex) codex_state=$plugin_state ;; claude) claude_state=$plugin_state ;; esac
 done
 
-if [ -n "$media_packages" ]; then install_packages "$media_packages"; fi
+if [ -n "$media_packages" ]; then
+  install_packages "$media_packages"
+  if [ "$dry_run" -eq 0 ]; then
+    for tool in $MEDIA_TOOLS; do have_tool "$tool" || fail "$tool is still missing after package installation."; done
+  fi
+fi
 
 for client in $clients; do
   if ! marketplace_present "$client"; then
