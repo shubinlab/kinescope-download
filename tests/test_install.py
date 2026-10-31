@@ -31,7 +31,7 @@ class InstallerTests(unittest.TestCase):
             "  case \"$package\" in\n"
             "    git) printf '#!/bin/sh\\nprintf \\\"git version 2.0\\\\n\\\"\\n' > \"$KINESCOPE_TEST_BIN/git\"; chmod +x \"$KINESCOPE_TEST_BIN/git\" ;;\n"
             "    yt-dlp) printf '#!/bin/sh\\nexit 0\\n' > \"$KINESCOPE_TEST_BIN/yt-dlp\"; chmod +x \"$KINESCOPE_TEST_BIN/yt-dlp\" ;;\n"
-            "    ffmpeg) printf '#!/bin/sh\\nexit 0\\n' > \"$KINESCOPE_TEST_BIN/ffmpeg\"; cp \"$KINESCOPE_TEST_BIN/ffmpeg\" \"$KINESCOPE_TEST_BIN/ffprobe\"; chmod +x \"$KINESCOPE_TEST_BIN/ffprobe\" ;;\n"
+            "    ffmpeg) printf '#!/bin/sh\\nexit 0\\n' > \"$KINESCOPE_TEST_BIN/ffmpeg\"; chmod +x \"$KINESCOPE_TEST_BIN/ffmpeg\"; cp \"$KINESCOPE_TEST_BIN/ffmpeg\" \"$KINESCOPE_TEST_BIN/ffprobe\" ;;\n"
             "  esac\n"
             "done\n"
         )
