@@ -229,7 +229,7 @@ class PackageTests(unittest.TestCase):
         text = readme.read_text(encoding="utf-8")
         for required in ("Linux", "macOS", "Codex", "Claude Code", "DRM"):
             self.assertIn(required, text)
-        self.assertIn("checks and installs missing Git, Codex/Claude CLI, yt-dlp, and FFmpeg", text)
+        self.assertIn("installs missing Git, media tools, and client CLI(s), then adds the skill", text)
         self.assertIn("./install.sh", text)
 
     def test_readme_documents_single_script_install(self):
@@ -238,15 +238,16 @@ class PackageTests(unittest.TestCase):
             "curl -fsSL https://shubin.co/k | sh",
             text,
         )
-        self.assertIn("same `install.sh` published in release 1.6.1", text)
-        self.assertIn("If neither is present, it installs both Codex and Claude Code", text)
-        self.assertIn("Use `--codex` or `--claude`", text)
+        self.assertIn("The short URL serves the release installer", text)
+        self.assertIn("If neither client is installed, it installs both", text)
+        self.assertIn("The installer supports `--codex`, `--claude`, and `--dry-run`", text)
         self.assertIn("It does not hand off to another installer or require Python", text)
-        self.assertIn("It checks and installs missing Git, Codex/Claude CLI, yt-dlp, and FFmpeg", text)
-        self.assertIn("Official installers do not sign in for you", text)
-        self.assertIn("The script detects and reports the OS or Linux distribution version, architecture", text)
-        self.assertIn("It stops on Fedora Atomic variants", text)
-        self.assertIn("NixOS, SteamOS, and known Bazzite/Universal Blue IDs", text)
+        self.assertIn("installs missing Git, media tools, and client CLI(s)", text)
+        self.assertIn("Sign in through the client when prompted", text)
+        self.assertIn("## Supported platforms", text)
+        self.assertIn("Fedora / RHEL family", text)
+        self.assertIn("Unknown Linux distributions proceed only if a supported package manager is unambiguous", text)
+        self.assertIn("assets/install-flow.svg", text)
         self.assertIn("--dry-run", text)
 
     def test_brand_asset_is_valid_svg(self):
@@ -255,6 +256,18 @@ class PackageTests(unittest.TestCase):
         root = ET.parse(logo).getroot()
         self.assertTrue(root.tag.endswith("svg"))
         self.assertIn("viewBox", root.attrib)
+
+    def test_readme_install_flow_art_is_valid_and_accessible(self):
+        graphic = ROOT / "assets" / "install-flow.svg"
+        self.assertTrue(graphic.is_file(), "missing README install-flow graphic")
+        root = ET.parse(graphic).getroot()
+        self.assertTrue(root.tag.endswith("svg"))
+        self.assertIn("viewBox", root.attrib)
+        namespace = "{http://www.w3.org/2000/svg}"
+        self.assertIsNotNone(root.find(f"{namespace}title"))
+        self.assertIsNotNone(root.find(f"{namespace}desc"))
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("assets/install-flow.svg", readme)
 
     def test_both_clients_use_a_square_png_icon(self):
         icon = PLUGIN / "assets/icon.png"

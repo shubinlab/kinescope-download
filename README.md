@@ -1,18 +1,19 @@
-<div align="center">
-  <img src="assets/logo.svg" width="420" alt="Kinescope Download">
-  <p><strong>One command installs the shared Kinescope skill and download tools for Codex or Claude Code.</strong></p>
-  <p>
-    <a href="https://github.com/shubinlab/kinescope-download/actions"><img src="https://img.shields.io/github/actions/workflow/status/shubinlab/kinescope-download/ci.yml?branch=main&label=checks" alt="Checks"></a>
-    <img src="https://img.shields.io/badge/Linux-supported-4c9a6a" alt="Linux supported">
-    <img src="https://img.shields.io/badge/macOS-supported-6376d8" alt="macOS supported">
-    <img src="https://img.shields.io/badge/Codex-plugin-15b8a6" alt="Codex plugin">
-    <img src="https://img.shields.io/badge/Claude%20Code-plugin-d98b52" alt="Claude Code plugin">
-  </p>
-</div>
+# Kinescope Download
+
+<p align="center"><img src="assets/logo.svg" width="320" alt="Kinescope Download"></p>
+<p align="center"><strong>One command installs the Codex or Claude skill and prepares your system to save authorized Kinescope videos as verified MP4s.</strong></p>
+
+<p align="center">
+  <a href="https://github.com/shubinlab/kinescope-download/actions"><img src="https://img.shields.io/github/actions/workflow/status/shubinlab/kinescope-download/ci.yml?branch=main&label=CI" alt="CI status"></a>
+  <a href="https://github.com/shubinlab/kinescope-download/releases/latest"><img src="https://img.shields.io/github/v/release/shubinlab/kinescope-download?label=release" alt="Latest release"></a>
+  <a href="https://github.com/shubinlab/kinescope-download/blob/main/LICENSE"><img src="https://img.shields.io/github/license/shubinlab/kinescope-download" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/Linux-macOS-4c9a6a" alt="Linux and macOS">
+  <img src="https://img.shields.io/badge/Codex-Claude%20Code-6376d8" alt="Codex and Claude Code">
+</p>
 
 ---
 
-Kinescope Download packages one shared skill for **Codex** and **Claude Code**. It checks the available streams, prefers the highest authorized source, uses bounded parallel HLS downloads, and verifies the final MP4.
+The shared Codex and Claude Code skill downloads authorized Kinescope video in the best available quality and verifies the resulting MP4.
 
 ## Install
 
@@ -24,58 +25,51 @@ One standalone POSIX shell script handles detection, prerequisite installation, 
 curl -fsSL https://shubin.co/k | sh
 ```
 
-That short URL serves the same `install.sh` published in release 1.6.1. It checks and installs missing Git, Codex/Claude CLI, yt-dlp, and FFmpeg through the detected package manager or official client installer; package installation may request your normal `sudo` authentication. The script needs `curl` and a POSIX shell. On macOS, Homebrew must already be installed if Git or media tools need installing; the script does not install or modify Homebrew. On Linux, it detects the distribution and package manager from `/etc/os-release`. It stops on Fedora Atomic variants, openSUSE MicroOS/Aeon/Kalpa, NixOS, SteamOS, and known Bazzite/Universal Blue IDs rather than changing an immutable base image.
+The short URL serves the release installer. It detects the system, installs missing Git, media tools, and client CLI(s), then adds the skill. If neither client is installed, it installs both. Sign in through the client when prompted. Package installation may ask for `sudo`.
 
-By default, the script installs into the client CLI already present. If neither is present, it installs both Codex and Claude Code so the command needs no client-selection prompt. Use `--codex` or `--claude` to choose just one. Official installers do not sign in for you. Run as your regular user, not with `sudo`; package managers request elevation only for system packages.
+<p align="center"><img src="assets/install-flow.svg" alt="The installer detects the platform, fills missing prerequisites, adds the skill, and then the user signs in." width="900"></p>
 
-The script detects and reports the OS or Linux distribution version, architecture, package manager, and whether tools are present. `--dry-run` reports detected tool state without changing the machine. Installation steps are sequential, not transactional; if a later step fails, earlier setup may remain. The script checks current client and marketplace state on retry and avoids duplicate registrations.
+After setup, ask Codex or Claude Code: “Download this Kinescope video in the highest available quality.”
+
+## Supported platforms
+
+| Platform | Package manager | Notes |
+|---|---|---|
+| macOS | Homebrew | Homebrew is needed if Git or media tools are missing. |
+| Omarchy | `omarchy pkg` | Uses Omarchy's native package helper. |
+| Debian / Ubuntu family | `apt-get` | Includes compatible `ID_LIKE` distributions. |
+| Fedora / RHEL family | `dnf` | Fedora Atomic variants are left unchanged. |
+| Arch family | `pacman` | Includes compatible Arch derivatives. |
+| openSUSE | `zypper` | Leap and Tumbleweed. |
+
+Known immutable systems, including NixOS, SteamOS, MicroOS, and Universal Blue images, stop before system package changes. Unknown Linux distributions proceed only if a supported package manager is unambiguous.
+
+The installer supports `--codex`, `--claude`, and `--dry-run`. By default it uses client CLIs already present; if neither is present, it installs both. It never runs as root. Installation is sequential, so a later failure can leave earlier prerequisites in place.
 
 <details>
 <summary>Choose one client or install manually</summary>
 
-### Select one client
-
-```bash
+```sh
 ./install.sh --codex
 ./install.sh --claude
+./install.sh --dry-run
 ```
 
-Or install both explicitly:
+Manual Codex install:
 
-```bash
-./install.sh --all
-```
-
-The default `./install.sh` installs into supported clients already on `PATH`; if neither is present, it installs both. Use `--codex` or `--claude` to choose one. The script never runs as root; package managers use `sudo` only when installing required system packages.
-
-### Install manually
-
-Codex:
-
-```bash
+```sh
 codex plugin marketplace add shubinlab/kinescope-download
 codex plugin add kinescope-download@kinescope-download
 ```
 
-Claude Code:
+Manual Claude Code install:
 
-```bash
+```sh
 claude plugin marketplace add shubinlab/kinescope-download
 claude plugin install kinescope-download@kinescope-download --scope user
 ```
 
-In Claude Code, invoke `/kinescope-download:kinescope-video-download`. Codex can select the packaged skill when a Kinescope download request matches it.
-
 </details>
-
-## Requirements
-
-- A POSIX shell and `curl` to run the one-file installer.
-- A supported package manager when Git or media tools need installing: Omarchy `omarchy`, Debian/Ubuntu `apt-get`, Fedora/RHEL `dnf`, Arch `pacman`, openSUSE `zypper`, or macOS Homebrew. Linux managers need `sudo` for system package writes, except Omarchy's `omarchy pkg` helper.
-- Codex CLI and Claude Code; if neither is installed, the script installs both.
-- `yt-dlp` and FFmpeg (`ffprobe` is included with FFmpeg); the script installs either if missing.
-
-The script installs Git, media tools, and client CLIs when missing. Authentication remains a separate user-operated step. `--dry-run` does not install packages or change client configuration.
 
 ## What it does
 
@@ -98,6 +92,9 @@ Quality is per-video. A 4K rendition is used only when the authorized stream act
 - Installation adds a marketplace and the plugin to the selected client. It does not add hooks, MCP servers, daemons, or startup tasks.
 - VPN changes are opt-in. Direct egress is not claimed from a route table or socket address alone; the skill requires interface-aware packet evidence during transfer.
 
+<details>
+<summary>Optional local download history</summary>
+
 ## Local download history
 
 The plugin can keep an opt-in, local download history shared by Codex and Claude on the same machine. It is disabled by default for new users. From a repository checkout, enable or inspect it with:
@@ -113,6 +110,8 @@ python3 plugins/kinescope-download/skills/kinescope-video-download/scripts/local
 History is stored under `~/.local/state/kinescope-download/` for a stable per-user path shared by Codex and Claude on the same machine, with a private directory and file permissions. It records only fixed categories: day, random run/event IDs, client and plugin/tool versions, source type, outcome/failure class, concurrency/retry buckets, coarse transfer-time/media-duration/size/resolution buckets, and probe/decode results. It never records URLs, video IDs, titles, paths, referrers, credentials, transcripts, commands, or raw errors. Complete entries are append-only; the reader shows a summary of the latest 20 attempts and labels starts without finishes as open/unclosed because they may still be running. At 16 MiB, new writes stop rather than deleting old entries. Clearing removes saved attempts but leaves collection enabled; run `disable` before `clear --confirm` to stop future writes too.
 
 The logger itself makes no network requests and does not upload history. The state directory may still be part of a user-configured sync or network filesystem. The plugin keeps history across client restarts and plugin updates but does not back it up; it can be lost if the home directory or disk is lost. When the skill reads the sanitized summary, those metrics become model context and may be sent to the selected Codex or Claude model provider. Marketplace users can find the installed script under the plugin path shown by `codex plugin list --json` (`source.path`) or `claude plugin list --json` (`installPath`), followed by `skills/kinescope-video-download/scripts/local_history.py`.
+
+</details>
 
 Kinescope is a trademark of its owner. Kinescope Download is an independent community project and is not affiliated with or endorsed by Kinescope.
 
@@ -146,6 +145,9 @@ Uninstalling the plugin does not remove `yt-dlp`, FFmpeg, downloaded videos, or 
 
 </details>
 
+<details>
+<summary>Maintainer checks</summary>
+
 ## Development checks
 
 ```bash
@@ -155,3 +157,5 @@ claude plugin validate --strict .
 ```
 
 For the exact package design, see [`docs/design.md`](docs/design.md). For workflow rules and format research, see the packaged [Kinescope skill](plugins/kinescope-download/skills/kinescope-video-download/SKILL.md).
+
+</details>
