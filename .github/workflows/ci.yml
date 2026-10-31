@@ -25,6 +25,6 @@ jobs:
       - name: Check shell entrypoint syntax
         run: bash -n install.sh
       - name: Compile installer
-        run: python3 -m py_compile scripts/install.py plugins/kinescope-download/skills/kinescope-video-download/scripts/extract_manifest.py plugins/kinescope-download/skills/kinescope-video-download/scripts/local_history.py
+        run: python3 -m py_compile plugins/kinescope-download/skills/kinescope-video-download/scripts/extract_manifest.py plugins/kinescope-download/skills/kinescope-video-download/scripts/local_history.py
       - name: Run package and installer tests
         run: python3 -m unittest discover -s tests -v

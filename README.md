@@ -18,31 +18,17 @@ Kinescope Download packages one shared skill for **Codex** and **Claude Code**. 
 
 ### Linux and macOS
 
-Use one bootstrap script on Omarchy, supported Linux distributions, and macOS. It downloads the versioned installer to a temporary file, then the script fetches the matching GitHub source archive; Git is not needed to fetch the project itself. Git is then checked and installed if missing because the client CLIs use it to fetch their plugin marketplace. The shell bootstrap also installs Python 3 through the detected native package manager when missing, then runs the shared Python installer.
+One standalone POSIX shell script handles detection, prerequisite installation, client selection, media dependencies, and plugin setup. It does not hand off to another installer or require Python.
 
 ```sh
-set -eu
-installer=$(mktemp) || exit 1
-trap 'rm -f "$installer"' EXIT HUP INT TERM
-installer_url=https://raw.githubusercontent.com/shubinlab/kinescope-download/v1.4.0/install.sh
-if command -v curl >/dev/null 2>&1; then
-  curl --fail --location --show-error --proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 0 "$installer_url" --output "$installer"
-else
-  if command -v wget >/dev/null 2>&1; then
-    wget --quiet --max-redirect=0 "$installer_url" --output-document="$installer"
-  else
-    printf '%s\n' 'Install curl or wget, then rerun this block.' >&2
-    exit 127
-  fi
-fi
-sh "$installer" --with-deps
+installer=$(mktemp) && curl --fail --location --show-error --proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 0 https://raw.githubusercontent.com/shubinlab/kinescope-download/v1.5.0/install.sh --output "$installer" && sh "$installer" --with-deps; result=$?; rm -f "$installer"; exit "$result"
 ```
 
-The example installs missing media tools too; omit `--with-deps` if you only want the plugin. That flag may install system packages and request your normal `sudo` authentication. The first download needs a POSIX shell, `curl` or `wget`, `tar`, `gzip`, `mktemp`, and standard system utilities (`id`, `uname`, `sed`, `head`, `tr`). On macOS, Homebrew must already be present if Git or Python 3 needs installing; the script does not install or modify Homebrew. On Linux, it detects the distribution and package manager from `/etc/os-release`. It stops on Fedora Atomic variants, openSUSE MicroOS/Aeon/Kalpa, NixOS, SteamOS, and known Bazzite/Universal Blue IDs rather than changing an immutable base image.
+The example installs missing media tools too; omit `--with-deps` if you only want the plugin. That flag may install system packages and request your normal `sudo` authentication. The script needs `curl` and a POSIX shell. It installs Git when missing because the client CLIs use Git for marketplace plugins. On macOS, Homebrew must already be installed if Git or media tools need installing; the script does not install or modify Homebrew. On Linux, it detects the distribution and package manager from `/etc/os-release`. It stops on Fedora Atomic variants, openSUSE MicroOS/Aeon/Kalpa, NixOS, SteamOS, and known Bazzite/Universal Blue IDs rather than changing an immutable base image.
 
 If neither Codex nor Claude Code is installed, an interactive run asks which client CLI to install. Use `--codex`, `--claude`, or `--all` to select one or both without a prompt. The selected missing CLI is installed with its official user-level installer; the script never signs in for you. See the [Codex CLI instructions](https://github.com/openai/codex#installing-and-running-codex-cli) and [Claude Code setup](https://code.claude.com/docs/en/setup). If one or more clients are already present, it installs the plugin into those clients by default. `--with-deps` installs missing `yt-dlp` and FFmpeg. Run as your regular user, not with `sudo`; package managers request elevation only for system packages.
 
-The installer detects and reports the OS or Linux distribution version, architecture, selected package manager, and available tool versions. Version reporting is informational: it does not enforce minimum versions or run health probes. `--dry-run` previews client and media-package changes when Python is available. If Python 3 is missing, the shell prints the bootstrap plan and stops; if only Git is missing, it prints that plan and continues the client/media preview without installing anything. Installation steps are sequential, not transactional; if a later step fails, earlier setup may remain. The installer checks current state on retry and avoids duplicate client registrations.
+The script detects and reports the OS or Linux distribution version, architecture, package manager, and whether tools are present. `--dry-run` reports detected tool state without changing the machine. Installation steps are sequential, not transactional; if a later step fails, earlier setup may remain. The script checks current client and marketplace state on retry and avoids duplicate registrations.
 
 ### Select one client
 
@@ -79,12 +65,12 @@ In Claude Code, invoke `/kinescope-download:kinescope-video-download`. Codex can
 
 ## Requirements
 
-- A POSIX shell, `curl` or `wget`, `tar`, and `mktemp` for the first-run bootstrap.
-- A supported package manager when Git or Python 3 needs installing: Omarchy `omarchy`, Debian/Ubuntu `apt-get`, Fedora/RHEL `dnf`, Arch `pacman`, openSUSE `zypper`, or macOS Homebrew. Linux managers need `sudo` for system package writes, except Omarchy's `omarchy pkg` helper.
-- Codex CLI with plugin marketplace support and/or Claude Code with plugin commands; the bootstrap can install the selected CLI.
+- A POSIX shell and `curl` to run the one-file installer.
+- A supported package manager when Git or media tools need installing: Omarchy `omarchy`, Debian/Ubuntu `apt-get`, Fedora/RHEL `dnf`, Arch `pacman`, openSUSE `zypper`, or macOS Homebrew. Linux managers need `sudo` for system package writes, except Omarchy's `omarchy pkg` helper.
+- Codex CLI or Claude Code; the script can install the selected missing CLI.
 - `yt-dlp` and FFmpeg (`ffprobe` is included with FFmpeg) to download and verify media.
 
-The bootstrap installs Git and Python 3 when missing. It can install Codex CLI or Claude Code when selected, but authentication remains a separate user-operated step. The plugin can be installed without media tools. If they are missing, it reports that; `--with-deps` installs them using a supported package manager. `--dry-run` does not install packages or change client configuration.
+The script installs Git when missing and can install Codex CLI or Claude Code when selected. Authentication remains a separate user-operated step. The plugin can be installed without media tools. If they are missing, it reports that; `--with-deps` installs them using a supported package manager. `--dry-run` does not install packages or change client configuration.
 
 ## What it does
 
