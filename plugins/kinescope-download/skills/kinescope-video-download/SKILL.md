@@ -7,6 +7,12 @@ description: Use when downloading Kinescope video links to MP4, selecting the be
 
 Download only videos the user owns or is authorized to save. Prefer Kinescope's authenticated asset download when the user has legitimate workspace access; otherwise use the public/player HLS stream that the user can already access. Do not defeat DRM, recover decryption keys, or use tools whose purpose is DRM circumvention.
 
+## Local download history
+
+History is opt-in and shared by Codex and Claude on this machine. At the start of a download task, run `summary` with the absolute `local_history.py` path beside this loaded SKILL.md; do not resolve it relative to the user's working directory. If history is enabled, use its fixed-category summary as context; do not read `events.jsonl` directly or change concurrency based on one attempt. Consider a different concurrency only after at least five comparable attempts across more than one concurrency value. At the start of each actual download attempt, call `start` and retain its run ID plus the exact client, source, plugin version, and yt-dlp version. After success, failure, or cancellation, call `finish` once with that run ID and the same retained metadata; only concurrency may change after retries. Record coarse transfer-time, media-duration, size, and resolution buckets, probe/decode outcomes, retry bucket, and concurrency. Never pass a URL, title, video ID, path, referrer, raw command, or error text to the history script.
+
+If a nonempty summary is used, briefly tell the user that recent local history informed the workflow; those values become part of the current model context. If history is disabled or empty, do not mention it. If reading or writing history fails, continue the video task without history and tell the user the entry was not saved. The logger writes only to local state and makes no network calls. `status`, `summary`, `disable`, and `clear --confirm` are available through `local_history.py`. Clearing removes saved attempts but leaves collection enabled; run `disable` before `clear --confirm` to stop future writes too. Starts without finishes are labeled open/unclosed because they may still be active.
+
 ## Choose the source and downloader
 
 1. Check the installed `yt-dlp`, `ffmpeg`, and `ffprobe` versions. Inspect available formats before choosing a quality. Do not assume a Kinescope-specific extractor exists or hardcode a format ID from another video.

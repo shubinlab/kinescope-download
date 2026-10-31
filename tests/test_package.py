@@ -45,7 +45,7 @@ class PackageTests(unittest.TestCase):
         codex_entry = next(item for item in codex_marketplace["plugins"] if item["name"] == "kinescope-download")
         claude_entry = next(item for item in claude_marketplace["plugins"] if item["name"] == "kinescope-download")
 
-        self.assertEqual(codex_plugin["version"], "1.0.6")
+        self.assertEqual(codex_plugin["version"], "1.1.0")
         self.assertEqual(codex_entry["version"], codex_plugin["version"])
         self.assertEqual(claude_plugin["version"], codex_plugin["version"])
         self.assertNotIn("version", claude_entry)
@@ -80,6 +80,21 @@ class PackageTests(unittest.TestCase):
         self.assertIn("--url-stdin", recovery)
         self.assertIn("env -u KINESCOPE_URL", recovery)
         self.assertIn("command history", recovery)
+
+    def test_local_history_is_opt_in_and_documented(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        history = PLUGIN / "skills/kinescope-video-download/scripts/local_history.py"
+        self.assertTrue(history.is_file())
+        self.assertIn("History is opt-in", skill)
+        self.assertIn("clear --confirm", skill)
+        self.assertIn("disabled by default", readme)
+        self.assertIn("may be sent to the selected Codex or Claude model provider", readme)
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("scripts/local_history.py", workflow)
+        script = history.read_text(encoding="utf-8")
+        for forbidden in ("urllib.request", "requests.", "socket.", "subprocess."):
+            self.assertNotIn(forbidden, script)
 
     def test_skill_has_no_host_paths_or_signed_manifest_examples(self):
         self.assertTrue(SKILL.is_file(), "missing packaged Kinescope skill")
