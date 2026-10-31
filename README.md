@@ -95,6 +95,22 @@ Quality is per-video. A 4K rendition is used only when the authorized stream act
 - Installation adds a marketplace and the plugin to the selected client. It does not add hooks, MCP servers, daemons, or startup tasks.
 - VPN changes are opt-in. Direct egress is not claimed from a route table or socket address alone; the skill requires interface-aware packet evidence during transfer.
 
+## Local download history
+
+The plugin can keep an opt-in, local download history shared by Codex and Claude on the same machine. It is disabled by default for new users. From a repository checkout, enable or inspect it with:
+
+```bash
+python3 plugins/kinescope-download/skills/kinescope-video-download/scripts/local_history.py enable
+python3 plugins/kinescope-download/skills/kinescope-video-download/scripts/local_history.py summary
+python3 plugins/kinescope-download/skills/kinescope-video-download/scripts/local_history.py status
+python3 plugins/kinescope-download/skills/kinescope-video-download/scripts/local_history.py disable
+python3 plugins/kinescope-download/skills/kinescope-video-download/scripts/local_history.py clear --confirm
+```
+
+History is stored under `~/.local/state/kinescope-download/` for a stable per-user path shared by Codex and Claude on the same machine, with a private directory and file permissions. It records only fixed categories: day, random run/event IDs, client and plugin/tool versions, source type, outcome/failure class, concurrency/retry buckets, coarse transfer-time/media-duration/size/resolution buckets, and probe/decode results. It never records URLs, video IDs, titles, paths, referrers, credentials, transcripts, commands, or raw errors. Complete entries are append-only; the reader shows a summary of the latest 20 attempts and labels starts without finishes as open/unclosed because they may still be running. At 16 MiB, new writes stop rather than deleting old entries. Clearing removes saved attempts but leaves collection enabled; run `disable` before `clear --confirm` to stop future writes too.
+
+The logger itself makes no network requests and does not upload history. The state directory may still be part of a user-configured sync or network filesystem. The plugin keeps history across client restarts and plugin updates but does not back it up; it can be lost if the home directory or disk is lost. When the skill reads the sanitized summary, those metrics become model context and may be sent to the selected Codex or Claude model provider. Marketplace users can find the installed script under the plugin path shown by `codex plugin list --json` (`source.path`) or `claude plugin list --json` (`installPath`), followed by `skills/kinescope-video-download/scripts/local_history.py`.
+
 Kinescope is a trademark of its owner. Kinescope Download is an independent community project and is not affiliated with or endorsed by Kinescope.
 
 ## Update or uninstall
