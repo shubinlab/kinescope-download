@@ -80,7 +80,7 @@ The plugin can be installed without media tools. If they are missing, it reports
 2. Selects the highest available video and audio streams for the specific video, then merges them into MP4.
 3. Starts HLS fragment concurrency at 16 and reduces it if the service returns rate limits or fragment errors.
 4. Recovers a common 403 caused by HTML-escaped signed manifests without printing or storing signed URLs in logs.
-5. Checks the MP4 metadata and performs a full decode when integrity verification is needed.
+5. Uses quiet output for agent runs and checks MP4 metadata plus a full decode before reporting verified output.
 6. Changes VPN routing only when requested, and keeps other destinations such as ChatGPT on the VPN.
 
 Quality is per-video. A 4K rendition is used only when the authorized stream actually provides one; format IDs are never hardcoded between videos.
