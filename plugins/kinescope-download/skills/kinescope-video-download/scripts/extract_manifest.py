@@ -8,11 +8,17 @@ import os
 import re
 import sys
 from urllib.parse import urljoin, urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPCookieProcessor, Request, build_opener
+
+from browser_cookies import CookieError, export_browser_cookies, write_host_cookie_file
 
 
 MAX_PAGE_BYTES = 8 * 1024 * 1024
-TRUSTED_DOMAINS = ("kinescope.io", "kinescopecdn.net")
+KINESCOPE_PAGE_HOSTS = ("kinescope.io", "player.kinescope.io")
+KINESCOPE_MANIFEST_HOSTS = (
+    "kinescope.io", "player.kinescope.io", "kinescopecdn.net",
+    "cdn.kinescopecdn.net", "edge-msk-10.kinescopecdn.net",
+)
 
 
 def trusted_https_url(value: str) -> bool:
@@ -25,7 +31,21 @@ def trusted_https_url(value: str) -> bool:
             and parsed.username is None
             and parsed.password is None
             and parsed.port in (None, 443)
-            and any(host == domain or host.endswith("." + domain) for domain in TRUSTED_DOMAINS)
+            and host in KINESCOPE_MANIFEST_HOSTS
+        )
+    except ValueError:
+        return False
+
+
+def trusted_page_url(value: str) -> bool:
+    try:
+        parsed = urlsplit(value)
+        return (
+            parsed.scheme.lower() == "https"
+            and parsed.hostname in KINESCOPE_PAGE_HOSTS
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.port in (None, 443)
         )
     except ValueError:
         return False
@@ -53,18 +73,27 @@ def prepare_referrer(value: str) -> str:
 
 
 class TrustedRedirects(HTTPRedirectHandler):
+    def __init__(self, request_host: str):
+        super().__init__()
+        self.request_host = request_host
+
     def redirect_request(self, request, response, code, message, headers, new_url):
-        if not trusted_https_url(new_url):
-            raise ValueError("Redirect destination is not an HTTPS Kinescope URL")
+        try:
+            host = urlsplit(new_url).hostname
+        except ValueError:
+            host = None
+        if not trusted_page_url(new_url) or host != self.request_host:
+            raise ValueError("Redirect destination changed the Kinescope page host")
         return super().redirect_request(request, response, code, message, headers, new_url)
 
 
 def main(argv: list[str]) -> int:
-    if not argv or argv[0] != "--url-stdin" or len(argv) not in (2, 3):
-        print("Usage: extract_manifest.py --url-stdin OUTPUT_FILE [REFERRER_OUTPUT_FILE]", file=sys.stderr)
+    if not argv or argv[0] != "--url-stdin" or len(argv) not in (3, 4):
+        print("Usage: extract_manifest.py --url-stdin BROWSER_SPEC MANIFEST_FILE [REFERRER_OUTPUT_FILE]", file=sys.stderr)
         return 2
-    _, output_path, *referrer_output = argv
+    _, browser_spec, output_path, *referrer_output = argv
     referrer_output_path = referrer_output[0] if referrer_output else None
+    cookie_path = output_path + ".cookies"
     page_url = sys.stdin.readline(16_385).rstrip("\r\n")
     if len(page_url) > 16_384 or "\n" in page_url or "\r" in page_url:
         print("Page URL input is too long or malformed.", file=sys.stderr)
@@ -75,40 +104,48 @@ def main(argv: list[str]) -> int:
         return 1
 
     referrer_url = raw_referrer
-    if not trusted_https_url(page_url):
-        print("Page URL must use HTTPS on a recognized Kinescope host.", file=sys.stderr)
+    if not trusted_page_url(page_url):
+        print("Page URL must use HTTPS on a recognized Kinescope player host.", file=sys.stderr)
         return 1
     try:
         referrer_url = prepare_referrer(referrer_url)
     except ValueError as error:
         print(str(error), file=sys.stderr)
         return 1
-    if referrer_output_path == output_path:
-        print("Manifest and referrer output files must be different.", file=sys.stderr)
+    output_paths = [output_path, cookie_path] + ([referrer_output_path] if referrer_output_path else [])
+    canonical_paths = [os.path.realpath(path) for path in output_paths]
+    if len(set(canonical_paths)) != len(canonical_paths):
+        print("Manifest, cookie, and Referer output files must be different.", file=sys.stderr)
         return 1
-    if os.path.lexists(output_path):
+    if any(os.path.lexists(path) for path in output_paths):
         print("Output file already exists; refusing to overwrite it.", file=sys.stderr)
         return 1
-    if referrer_output_path and os.path.lexists(referrer_output_path):
-        print("Referrer output file already exists; refusing to overwrite it.", file=sys.stderr)
+
+    try:
+        page_host = urlsplit(page_url).hostname
+        cookies = export_browser_cookies(page_url, browser_spec, (page_host,))
+    except CookieError:
+        print("Could not load browser cookies for the Kinescope page safely.", file=sys.stderr)
         return 1
 
     headers = {"User-Agent": "Mozilla/5.0"}
     if referrer_url:
         headers["Referer"] = referrer_url
     request = Request(page_url, headers=headers)
-    opener = build_opener(TrustedRedirects())
+    opener = build_opener(HTTPCookieProcessor(cookies), TrustedRedirects(page_host))
     try:
         with opener.open(request, timeout=30) as response:
             final_url = response.geturl()
-            if not trusted_https_url(final_url):
-                raise ValueError("Final response URL is not an HTTPS Kinescope URL")
+            if not trusted_page_url(final_url) or urlsplit(final_url).hostname != page_host:
+                raise ValueError("Final response URL changed the Kinescope page host")
             page = response.read(MAX_PAGE_BYTES + 1)
     except (OSError, ValueError):
         # Network exception strings can contain the request URL, including its
         # query credentials. Keep diagnostics useful without echoing that URL.
         print("Could not fetch the Kinescope page safely; check access and try again.", file=sys.stderr)
         return 1
+    finally:
+        cookies.clear()
 
     if len(page) > MAX_PAGE_BYTES:
         print(f"Page exceeds the {MAX_PAGE_BYTES // (1024 * 1024)} MiB safety limit.", file=sys.stderr)
@@ -123,26 +160,45 @@ def main(argv: list[str]) -> int:
         print(f"Expected one recognized Kinescope master manifest; found {len(manifests)}", file=sys.stderr)
         return 1
 
+    manifest_url = manifests[0]
+    manifest_host = urlsplit(manifest_url).hostname
     try:
+        manifest_cookies = export_browser_cookies(manifest_url, browser_spec, (manifest_host,))
+    except CookieError:
+        print("Could not load browser cookies for the Kinescope manifest host safely.", file=sys.stderr)
+        return 1
+
+    created_paths = []
+    try:
+        write_host_cookie_file(manifest_cookies, manifest_url, cookie_path)
+        created_paths.append(cookie_path)
         descriptor = os.open(output_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        created_paths.append(output_path)
         with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-            output.write(manifests[0] + "\n")
-    except FileExistsError:
-        print("Output file already exists; refusing to overwrite it.", file=sys.stderr)
-        return 1
-    except OSError as error:
-        print(f"Could not create the private output file: {error}", file=sys.stderr)
-        return 1
-    if referrer_output_path:
-        try:
+            output.write(manifest_url + "\n")
+        if referrer_output_path:
             descriptor = os.open(referrer_output_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            created_paths.append(referrer_output_path)
             with os.fdopen(descriptor, "w", encoding="utf-8") as output:
                 if referrer_url:
                     output.write(referrer_url + "\n")
-        except OSError:
-            print("Could not create the private referrer file.", file=sys.stderr)
-            return 1
-    print("One Kinescope master manifest saved to the private temporary file")
+    except (CookieError, FileExistsError):
+        print("Output file already exists; refusing to overwrite it.", file=sys.stderr)
+        for path in created_paths:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        return 1
+    except OSError:
+        print("Could not create the private output files.", file=sys.stderr)
+        for path in created_paths:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        return 1
+    print("Kinescope manifest and host-only cookie file saved privately")
     return 0
 
 

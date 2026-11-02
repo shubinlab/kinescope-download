@@ -51,7 +51,7 @@ class PackageTests(unittest.TestCase):
         codex_entry = next(item for item in codex_marketplace["plugins"] if item["name"] == "kinescope-download")
         claude_entry = next(item for item in claude_marketplace["plugins"] if item["name"] == "kinescope-download")
 
-        self.assertEqual(codex_plugin["version"], "1.6.1")
+        self.assertEqual(codex_plugin["version"], "1.7.0")
         self.assertEqual(codex_entry["version"], codex_plugin["version"])
         self.assertEqual(claude_plugin["version"], codex_plugin["version"])
         self.assertNotIn("version", claude_entry)
@@ -66,6 +66,42 @@ class PackageTests(unittest.TestCase):
             resolved = (SKILL.parent / reference).resolve()
             self.assertTrue(resolved.is_relative_to(PLUGIN.resolve()))
             self.assertTrue(resolved.is_file(), f"broken skill reference: {reference}")
+
+    def test_skill_documents_ontico_cards_and_host_scoped_browser_cookies(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        helper = PLUGIN / "skills/kinescope-video-download/scripts/extract_ontico_card.py"
+        self.assertTrue(helper.is_file(), "missing Ontico card adapter")
+        for phrase in (
+            "Ontico DevNavigator card",
+            "extract_ontico_card.py",
+            "--cookies-from-browser",
+            "conf.ontico.ru",
+            "domain-scoped",
+            "yt-dlp-supported",
+            "edge-msk-10.kinescopecdn.net",
+            "host-only cookie file",
+        ):
+            self.assertIn(phrase, skill)
+        self.assertIn("may be outdated", skill)
+        self.assertIn('--cookies "$cookie_file"', skill)
+        ontico_flow = skill.split("### Ontico DevNavigator cards", 1)[1].split("## Download efficiently", 1)[0]
+        self.assertIn('--cookies "$cookie_file"', ontico_flow)
+        self.assertNotIn('--cookies-from-browser "$BROWSER_SPEC"', ontico_flow)
+        probe = skill.split("When a direct, non-Kinescope source needs a format check", 1)[1].split("For an embedded player", 1)[0]
+        self.assertIn("BROWSER_SPEC=brave+gnomekeyring", probe)
+        self.assertIn('mkdir -p "$OUTPUT_DIR"', skill)
+
+    def test_readme_describes_ontico_and_supported_direct_video_sites(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Ontico DevNavigator", readme)
+        self.assertIn("yt-dlp-supported", readme)
+        self.assertIn("browser cookies", readme)
+        self.assertIn("domain-matched", readme)
+
+    def test_ci_compiles_the_ontico_adapter(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("scripts/extract_ontico_card.py", workflow)
+        self.assertIn("scripts/browser_cookies.py", workflow)
 
     def test_403_helper_reference_has_a_resolvable_directory_instruction(self):
         recovery = (SKILL.parent / "references/403-recovery.md").read_text(encoding="utf-8")
@@ -83,6 +119,8 @@ class PackageTests(unittest.TestCase):
             "Treat the returned link as a short-lived credential",
         ):
             self.assertIn(phrase, api_reference)
+        self.assertIn("browser_cookies.py", api_reference)
+        self.assertIn("host-only cookie file", api_reference)
         self.assertIn("--batch-file -", skill)
         self.assertIn("--url-stdin", recovery)
         self.assertIn("env -u KINESCOPE_URL", recovery)
@@ -91,6 +129,9 @@ class PackageTests(unittest.TestCase):
         self.assertIn('--config-locations "$referer_config"', recovery)
         self.assertIn("unset safe_referrer", recovery)
         self.assertIn("set +x\nset -euo pipefail", recovery)
+        self.assertIn('python3 "$helper" --url-stdin "$BROWSER_SPEC"', recovery)
+        self.assertIn('--cookies "$cookie_file"', recovery)
+        self.assertNotIn('--cookies-from-browser "$BROWSER_SPEC"', recovery)
         self.assertEqual(recovery.count("env -u KINESCOPE_URL -u KINESCOPE_REFERRER -u REFERRER_URL -u safe_referrer yt-dlp"), 1)
         self.assertIn("set +x", recovery)
         self.assertNotIn('--referer "$KINESCOPE_REFERRER"', recovery)
@@ -110,7 +151,11 @@ class PackageTests(unittest.TestCase):
     @unittest.skipUnless(hasattr(pty, "fork"), "requires a POSIX pseudo-terminal")
     def test_default_download_prompt_hides_url_from_argv_environment_and_xtrace(self):
         skill = SKILL.read_text(encoding="utf-8")
-        block = skill.split("```bash\n", 1)[1].split("\n```", 1)[0]
+        block = next(
+            block.split("\n```", 1)[0]
+            for block in skill.split("```bash\n")[1:]
+            if "Authorized video or share URL:" in block
+        )
         secret = "https://kinescope.io/share?access_token=stdin-sentinel"
 
         with tempfile.TemporaryDirectory() as temp:
@@ -119,7 +164,7 @@ class PackageTests(unittest.TestCase):
             bindir.mkdir()
             capture = root / "capture.json"
             output = root / "%(title)s-%(id)s.%(ext)s"
-            block = block.replace("'/path/to/output/%(title)s-%(id)s.%(ext)s'", shlex.quote(str(output)))
+            block = block.replace("OUTPUT_DIR='/path/to/output'", f"OUTPUT_DIR={shlex.quote(str(root))}")
             fake_ytdlp = bindir / "yt-dlp"
             fake_ytdlp.write_text(
                 "#!/usr/bin/env python3\n"
@@ -157,7 +202,7 @@ class PackageTests(unittest.TestCase):
                         except OSError:
                             chunk = b""
                         output_bytes.extend(chunk)
-                        if not sent and b"Kinescope share/embed URL:" in output_bytes:
+                        if not sent and b"Authorized video or share URL:" in output_bytes:
                             time.sleep(0.2)
                             os.write(master_fd, secret.encode() + b"\n")
                             sent = True

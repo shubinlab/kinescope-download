@@ -1,7 +1,7 @@
 # Kinescope Download
 
 <p align="center"><img src="assets/logo.svg" width="320" alt="Kinescope Download"></p>
-<p align="center"><strong>One command installs the Codex or Claude skill and prepares your system to save authorized Kinescope videos as verified MP4s.</strong></p>
+<p align="center"><strong>One command installs a Codex or Claude skill for authorized Kinescope videos, Ontico DevNavigator cards, and yt-dlp-supported pages.</strong></p>
 
 <p align="center">
   <a href="https://github.com/shubinlab/kinescope-download/actions"><img src="https://img.shields.io/github/actions/workflow/status/shubinlab/kinescope-download/ci.yml?branch=main&label=CI" alt="CI status"></a>
@@ -13,7 +13,7 @@
 
 ---
 
-The shared Codex and Claude Code skill downloads authorized Kinescope video in the best available quality and verifies the resulting MP4.
+The shared Codex and Claude Code skill downloads authorized Kinescope videos and Ontico DevNavigator card videos in the best available quality. Direct pages supported by yt-dlp also work. The skill verifies the resulting MP4.
 
 ## Install
 
@@ -29,7 +29,7 @@ The short URL serves the release installer. It detects the system, installs miss
 
 <p align="center"><img src="assets/install-flow.svg" alt="The installer detects the platform, fills missing prerequisites, adds the skill, and then the user signs in." width="900"></p>
 
-After setup, ask Codex or Claude Code: “Download this Kinescope video in the highest available quality.”
+After setup, ask Codex or Claude Code: “Download this Kinescope or Ontico DevNavigator video in the highest available quality.”
 
 ## Supported platforms
 
@@ -73,12 +73,14 @@ claude plugin install kinescope-download@kinescope-download --scope user
 
 ## What it does
 
-1. Guides the use of one unambiguous authorized original API asset when a token is already available locally, including container inspection, stream-copy remux when possible, and HLS fallback if remuxing is unsupported.
-2. Selects the highest available video and audio streams for the specific video, then merges them into MP4.
-3. Starts HLS fragment concurrency at 16 and reduces it if the service returns rate limits or fragment errors.
-4. Recovers a common 403 caused by HTML-escaped signed manifests without printing or storing signed URLs in logs.
-5. Uses quiet output for agent runs and checks MP4 metadata plus a full decode before reporting verified output.
-6. Changes VPN routing only when requested, and keeps other destinations such as ChatGPT on the VPN.
+1. Resolves an Ontico DevNavigator card through its authenticated card endpoint and passes the actual Kinescope player ID to yt-dlp.
+2. Uses yt-dlp's extractors for direct video pages they support.
+3. Loads browser cookies on source and download requests. Direct yt-dlp pages use domain-matched cookies; the Kinescope recovery flow makes a host-only cookie file for its validated manifest host.
+4. Selects the highest available video and audio streams for each video, then merges them into MP4.
+5. Starts HLS fragment concurrency at 16 and reduces it if the service returns rate limits or fragment errors.
+6. Recovers a common 403 caused by HTML-escaped signed manifests without printing or storing signed URLs in logs.
+7. Uses quiet output for agent runs and checks MP4 metadata plus a full decode before reporting verified output.
+8. Changes VPN routing only when requested, and keeps other destinations such as ChatGPT on the VPN.
 
 Quality is per-video. A 4K rendition is used only when the authorized stream actually provides one; format IDs are never hardcoded between videos.
 
@@ -86,8 +88,10 @@ Quality is per-video. A 4K rendition is used only when the authorized stream act
 
 - Use this only for videos you own or are authorized to save.
 - The plugin does not bypass DRM, retrieve decryption keys, or install DRM circumvention tools.
-- Keep API tokens, browser cookies, and signed URLs local; do not paste them into chat or publish raw downloader errors. The 403 helper stores the extracted manifest in a mode-`0600` temporary file and does not print it.
+- Brave browser cookies are used by default. The shared helper reads them through yt-dlp's cookie API, keeps only cookies matching the requested host in memory, and uses yt-dlp's interpreter when Homebrew isolates that module. Kinescope recovery downloads use a host-only cookie file; the plugin never copies an Ontico cookie header to Kinescope.
+- Keep API tokens and signed URLs local; do not paste them into chat or publish raw downloader errors. The 403 helper stores the extracted manifest in a mode-`0600` temporary file and does not print it.
 - Signed or token-bearing share and API URLs should be passed on stdin; do not put them in command text, shell history, environment variables, or process arguments.
+- Ontico support is limited to DevNavigator card URLs. The card endpoint is an observed integration; if its response changes or access is denied, the plugin stops. Other sites need a URL supported by yt-dlp or a direct player link.
 - The plugin does not silently choose among ambiguous API assets or transcode a non-MP4 original; it reports the format and asks before a lossy conversion.
 - Installation adds a marketplace and the plugin to the selected client. It does not add hooks, MCP servers, daemons, or startup tasks.
 - VPN changes are opt-in. Direct egress is not claimed from a route table or socket address alone; the skill requires interface-aware packet evidence during transfer.

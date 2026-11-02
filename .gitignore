@@ -6,6 +6,7 @@ __pycache__/
 .env.*
 !.env.example
 .superpowers/
+.worktrees/
 docs/superpowers/plans/
 downloads/
 *.mp4

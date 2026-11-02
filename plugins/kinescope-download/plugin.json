@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "kinescope-download",
-  "version": "1.6.1",
-  "description": "Download authorized Kinescope videos using the best available stream, verify MP4 output, and keep VPN routing narrow.",
+  "version": "1.7.0",
+  "description": "Download authorized Kinescope and Ontico DevNavigator videos as verified MP4 files.",
   "author": {
     "name": "shubinlab",
     "url": "https://github.com/shubinlab"
@@ -10,19 +10,19 @@
   "homepage": "https://github.com/shubinlab/kinescope-download",
   "repository": "https://github.com/shubinlab/kinescope-download",
   "license": "MIT",
-  "keywords": ["kinescope", "video-downloader", "yt-dlp", "hls", "mp4"],
+  "keywords": ["kinescope", "ontico", "devnavigator", "video-downloader", "yt-dlp", "hls", "mp4"],
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Kinescope Download",
-        "shortDescription": "Download authorized Kinescope videos as verified MP4 files.",
-        "longDescription": "Choose an authorized source asset or the highest available HLS streams, download with bounded concurrency, and verify the MP4. Includes safe 403 recovery and narrow VPN guidance for Linux and macOS.",
+        "shortDescription": "Download authorized Kinescope and Ontico videos as MP4 files.",
+        "longDescription": "Resolve authorized Ontico DevNavigator cards, use yt-dlp-supported video pages, select the highest available streams, and verify MP4 output. Includes safe 403 recovery and narrow VPN guidance for Linux and macOS.",
         "developerName": "shubinlab",
         "category": "Media",
         "composerIcon": "./assets/icon.png",
         "websiteURL": "https://github.com/shubinlab/kinescope-download",
         "defaultPrompt": [
-          "Download this Kinescope video in the highest available MP4 quality.",
+          "Download this Kinescope or Ontico DevNavigator video in the highest available MP4 quality.",
           "Diagnose this Kinescope 403 or HLS manifest issue without exposing signed URLs.",
           "Route only Kinescope outside my VPN while keeping ChatGPT on the VPN."
         ],
