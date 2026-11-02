@@ -270,6 +270,71 @@ class ExtractManifestTests(unittest.TestCase):
             self.assertEqual(output.read_text(encoding="utf-8"), "keep this file\n")
             build_opener.assert_not_called()
 
+    def test_output_alias_paths_are_rejected_before_network_access(self):
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+            def geturl(self):
+                return "https://kinescope.io/video"
+
+            def read(self, _limit):
+                return b'"https://cdn.kinescope.io/master.m3u8"'
+
+        class Opener:
+            def open(self, *_args, **_kwargs):
+                return Response()
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "nested").mkdir()
+            manifest = root / "manifest.txt"
+            alias = root / "nested" / ".." / "manifest.txt"
+            with patch.object(extract_manifest, "build_opener", return_value=Opener()) as build_opener:
+                with patch("sys.stderr", new_callable=io.StringIO):
+                    with patch("sys.stdin", new=io.StringIO("https://kinescope.io/video\nhttps://course.example/card\n")):
+                        status = extract_manifest.main(["--url-stdin", str(manifest), str(alias)])
+
+        self.assertEqual(status, 1)
+        build_opener.assert_not_called()
+
+    def test_manifest_is_removed_if_referrer_file_creation_fails(self):
+        signed_url = "https://cdn.kinescope.io/master.m3u8?token=private"
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+            def geturl(self):
+                return "https://kinescope.io/video"
+
+            def read(self, _limit):
+                return f'<script>"{signed_url}"</script>'.encode()
+
+        class Opener:
+            def open(self, *_args, **_kwargs):
+                return Response()
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = root / "manifest.txt"
+            missing_referrer = root / "missing" / "referrer.txt"
+            stderr = io.StringIO()
+            with patch.object(extract_manifest, "build_opener", return_value=Opener()):
+                with patch("sys.stdin", new=io.StringIO("https://kinescope.io/video\nhttps://course.example/card\n")):
+                    with patch("sys.stderr", new=stderr):
+                        status = extract_manifest.main(["--url-stdin", str(manifest), str(missing_referrer)])
+
+            self.assertEqual(status, 1)
+            self.assertFalse(manifest.exists())
+            self.assertNotIn(signed_url, stderr.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
