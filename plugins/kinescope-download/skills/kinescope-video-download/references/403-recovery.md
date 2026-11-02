@@ -1,6 +1,6 @@
 # Kinescope manifest 403 recovery
 
-Use this when ordinary `yt-dlp -F` extraction fails with 403 or when the player is known to require an embedding-page referrer. The share URL and any referrer are credentials: enter them at hidden prompts in an interactive Bash terminal and pipe them through stdin; do not put literal URLs in command text, environment variables, process arguments, logs, or shell history. If no controlling terminal is available, stop instead of falling back to argv. The helper rejects positional URLs, accepts stdin URLs over HTTPS on Kinescope hosts, checks redirects, caps page reads at 8 MiB, refuses existing output paths before network access, and creates private mode-`0600` manifest and sanitized referrer files. It strips referrer query/fragment before using it and reports network errors without exception text that might contain a request URL.
+Use this when yt-dlp's browser-cookie-enabled extraction fails with 403 or when the player requires an embedding-page Referer. Enter the share URL and any Referer at hidden prompts in an interactive Bash terminal; do not place them in command text, environment variables, process arguments, logs, or shell history. If no controlling terminal is available, stop instead of falling back to argv. The helper accepts HTTPS Kinescope URLs, uses only browser cookies matching the Kinescope request host, validates redirects, caps page reads at 8 MiB, refuses existing output paths before network access, and creates private mode-`0600` manifest and sanitized Referer files. It strips Referer query/fragment before using it and reports network errors without exception text that might contain a request URL.
 
 Set `OUTPUT_DIR` to the destination directory. If the player requires an embedding-page referrer and you know it, enter it at the prompt; otherwise leave the prompt blank.
 
@@ -8,11 +8,13 @@ Set `OUTPUT_DIR` to the destination directory. If the player requires an embeddi
 (
 set +x
 set -euo pipefail
+BROWSER_SPEC=brave+gnomekeyring
 manifest_dir=$(mktemp -d "${TMPDIR:-/tmp}/kinescope-manifest.XXXXXX")
 manifest_file="$manifest_dir/manifest.txt"
+cookie_file="$manifest_file.cookies"
 referer_file="$manifest_dir/referer.txt"
 referer_config="$manifest_dir/yt-dlp.conf"
-trap 'rm -f -- "$manifest_file" "$referer_file" "$referer_config"; rmdir "$manifest_dir"' EXIT
+trap 'rm -f -- "$manifest_file" "$cookie_file" "$referer_file" "$referer_config"; rmdir "$manifest_dir"' EXIT
 chmod 700 "$manifest_dir"
 (umask 077; : > "$referer_config")
 
@@ -32,7 +34,7 @@ if ! (
   printf '\n' >&2
   printf '%s\n' "$KINESCOPE_URL"
   printf '%s\n' "$KINESCOPE_REFERRER"
-) | env -u KINESCOPE_URL -u KINESCOPE_REFERRER -u REFERRER_URL -u safe_referrer python3 "$helper" --url-stdin "$manifest_file" "$referer_file"; then
+) | env -u KINESCOPE_URL -u KINESCOPE_REFERRER -u REFERRER_URL -u safe_referrer python3 "$helper" --url-stdin "$BROWSER_SPEC" "$manifest_file" "$referer_file"; then
   exit 1
 fi
 
@@ -47,6 +49,7 @@ if [[ -s $referer_file ]]; then
 fi
 
 env -u KINESCOPE_URL -u KINESCOPE_REFERRER -u REFERRER_URL -u safe_referrer yt-dlp --quiet --no-progress --no-playlist \
+  --cookies "$cookie_file" \
   --config-locations "$referer_config" \
   --format 'bestvideo+bestaudio/best' \
   --merge-output-format mp4 \

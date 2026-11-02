@@ -6,24 +6,18 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
-import tempfile
-from http.cookiejar import CookieJar, MozillaCookieJar
+from http.cookiejar import CookieJar
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPCookieProcessor, Request, build_opener
+import browser_cookies
 
 
 ONTICO_HOST = "conf.ontico.ru"
 MAX_URL_CHARS = 16_384
 MAX_API_BYTES = 1024 * 1024
 REQUEST_TIMEOUT = 20
-COOKIE_EXPORT_TIMEOUT = 60
 KINE_SCOPE_ID = re.compile(r"[A-Za-z0-9_-]{6,64}\Z")
-BROWSER_SPEC = re.compile(
-    r"(?:brave|chrome|chromium|edge|firefox|opera|safari|vivaldi|whale)"
-    r"(?:\+(?:basictext|gnomekeyring|kwallet|kwallet5|kwallet6))?\Z"
-)
 
 
 class AdapterError(ValueError):
@@ -81,52 +75,15 @@ def validate_output_paths(player_path: str | os.PathLike, referrer_path: str | o
 
 
 def export_browser_cookies(page_url: str, browser_spec: str) -> CookieJar:
-    if not BROWSER_SPEC.fullmatch(browser_spec):
-        raise AdapterError("Choose a supported browser cookie source.")
-    with tempfile.TemporaryDirectory(prefix="ontico-cookies-") as temp_dir:
-        os.chmod(temp_dir, 0o700)
-        cookie_path = os.path.join(temp_dir, "browser-cookies.txt")
-        old_umask = os.umask(0o077)
-        try:
-            args = [
-                "yt-dlp", "--ignore-config", "--no-warnings",
-                "--cookies-from-browser", browser_spec,
-                "--cookies", cookie_path,
-                "--no-playlist", "--skip-download", "--batch-file", "-",
-            ]
-            try:
-                subprocess.run(
-                    args,
-                    input=page_url + "\n",
-                    text=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=COOKIE_EXPORT_TIMEOUT,
-                    check=False,
-                )
-            except (OSError, subprocess.TimeoutExpired) as error:
-                raise AdapterError("Could not read browser cookies with yt-dlp.") from error
-        finally:
-            os.umask(old_umask)
-
-        if not os.path.isfile(cookie_path):
-            raise AdapterError("No browser cookie jar was available.")
-        os.chmod(cookie_path, 0o600)
-        source = MozillaCookieJar(cookie_path)
-        try:
-            source.load(ignore_discard=True, ignore_expires=True)
-        except (OSError, ValueError) as error:
-            raise AdapterError("Could not read the temporary browser cookie jar.") from error
-
-        scoped = CookieJar()
-        for cookie in source:
-            if cookie.domain.lstrip(".").lower() == ONTICO_HOST:
-                scoped.set_cookie(cookie)
-        source.clear()
-        os.unlink(cookie_path)
-        if not list(scoped):
-            raise AdapterError("No Ontico cookies were available in the selected browser.")
-        return scoped
+    try:
+        return browser_cookies.export_browser_cookies(
+            page_url,
+            browser_spec,
+            (ONTICO_HOST,),
+            require_matching_cookie=True,
+        )
+    except browser_cookies.CookieError as error:
+        raise AdapterError("Could not read Ontico browser cookies.") from error
 
 
 class OnticoRedirects(HTTPRedirectHandler):

@@ -5,6 +5,7 @@ import io
 import json
 import stat
 import tempfile
+import sys
 from functools import wraps
 from http.cookiejar import CookieJar
 from unittest.mock import patch
@@ -14,6 +15,7 @@ SCRIPT = (
     Path(__file__).resolve().parents[1]
     / "plugins/kinescope-download/skills/kinescope-video-download/scripts/extract_ontico_card.py"
 )
+sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("extract_ontico_card", SCRIPT)
 extract_ontico_card = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(extract_ontico_card)
@@ -52,48 +54,12 @@ class OnticoCardAdapterTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 extract_ontico_card.parse_card_url(url)
 
-    @requires_api("export_browser_cookies")
-    def test_browser_export_uses_stdin_and_filters_cookies_to_ontico(self):
+    @requires_api("browser_cookies", "export_browser_cookies")
+    def test_adapter_requests_only_ontico_cookies(self):
         page = "https://conf.ontico.ru/devnavigator/roadmaps/48/card/605"
-        cookies = """# Netscape HTTP Cookie File
-conf.ontico.ru\tFALSE\t/\tFALSE\t0\tconfontico_sid\tontico-cookie-sentinel
-.kinescope.io\tTRUE\t/\tTRUE\t0\tkinescope_session\tkinescope-cookie-sentinel
-example.invalid\tFALSE\t/\tFALSE\t0\tother\tother-cookie-sentinel
-"""
-        captured = {}
-
-        def export(args, **kwargs):
-            captured["args"] = args
-            captured["input"] = kwargs["input"]
-            cookie_path = Path(args[args.index("--cookies") + 1])
-            cookie_path.write_text(cookies, encoding="utf-8")
-            captured["cookie_path"] = cookie_path
-            return extract_ontico_card.subprocess.CompletedProcess(args, 1)
-
-        with patch.object(extract_ontico_card.subprocess, "run", side_effect=export):
-            jar = extract_ontico_card.export_browser_cookies(page, "brave+gnomekeyring")
-
-        self.assertEqual(captured["input"], page + "\n")
-        self.assertNotIn(page, captured["args"])
-        self.assertIn("--cookies-from-browser", captured["args"])
-        self.assertEqual([cookie.domain for cookie in jar], ["conf.ontico.ru"])
-        self.assertEqual([cookie.name for cookie in jar], ["confontico_sid"])
-        self.assertFalse(captured["cookie_path"].exists())
-
-    @requires_api("export_browser_cookies", "AdapterError")
-    def test_browser_export_rejects_missing_ontico_cookies(self):
-        page = "https://conf.ontico.ru/devnavigator/roadmaps/48/card/605"
-
-        def export(args, **kwargs):
-            Path(args[args.index("--cookies") + 1]).write_text(
-                "# Netscape HTTP Cookie File\nexample.invalid\tFALSE\t/\tFALSE\t0\tother\tx\n",
-                encoding="utf-8",
-            )
-            return extract_ontico_card.subprocess.CompletedProcess(args, 1)
-
-        with patch.object(extract_ontico_card.subprocess, "run", side_effect=export):
-            with self.assertRaises(extract_ontico_card.AdapterError):
-                extract_ontico_card.export_browser_cookies(page, "brave+gnomekeyring")
+        with patch.object(extract_ontico_card.browser_cookies, "export_browser_cookies", return_value=CookieJar()) as export:
+            extract_ontico_card.export_browser_cookies(page, "brave+gnomekeyring")
+        export.assert_called_once_with(page, "brave+gnomekeyring", ("conf.ontico.ru",), require_matching_cookie=True)
 
     @requires_api("fetch_card_player_id", "REQUEST_TIMEOUT")
     def test_card_lookup_uses_fixed_endpoint_and_stripped_card_referer(self):
